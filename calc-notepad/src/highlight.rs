@@ -66,12 +66,10 @@ fn color(k: Kind) -> Color32 {
     }
 }
 
-pub fn layout_job(text: &str, font_size: f32) -> LayoutJob {
-    let font = FontId::monospace(font_size);
-    let default = Color32::from_gray(200);
-    let mut job = LayoutJob::default();
-    let chars: Vec<char> = text.chars().collect();
-    let sp = spans(text);
+/// Раскраска одной строки-ввода (подсветка синтаксиса) в существующий job.
+fn append_syntax(job: &mut LayoutJob, line: &str, font: &FontId, default: Color32) {
+    let chars: Vec<char> = line.chars().collect();
+    let sp = spans(line);
     let mut idx = 0usize;
     let fmt = |c: Color32| TextFormat {
         font_id: font.clone(),
@@ -91,6 +89,56 @@ pub fn layout_job(text: &str, font_size: f32) -> LayoutJob {
     }
     if idx < chars.len() {
         job.append(&slice(idx, chars.len()), 0.0, fmt(default));
+    }
+}
+
+/// Раскраска всего буфера-«листа»: строки-ввод подсвечиваются, строки-результаты
+/// (начинаются с таба) рисуются на зелёном (ошибка — красном) фоне.
+pub fn sheet_layout_job(
+    text: &str,
+    font_size: f32,
+    error_lines: &std::collections::HashSet<usize>,
+) -> LayoutJob {
+    let font = FontId::monospace(font_size);
+    let default = Color32::from_gray(200);
+    let mut job = LayoutJob::default();
+    for (li, line) in text.split('\n').enumerate() {
+        if li > 0 {
+            job.append(
+                "\n",
+                0.0,
+                TextFormat {
+                    font_id: font.clone(),
+                    color: default,
+                    ..Default::default()
+                },
+            );
+        }
+        if line.starts_with('\t') {
+            let (bg, fg) = if error_lines.contains(&li) {
+                (
+                    Color32::from_rgb(0x4a, 0x1c, 0x1c),
+                    Color32::from_rgb(0xff, 0xb3, 0xb3),
+                )
+            } else {
+                (
+                    Color32::from_rgb(0x2f, 0x7d, 0x3f),
+                    Color32::from_rgb(0xe8, 0xff, 0xe8),
+                )
+            };
+            job.append(
+                line,
+                0.0,
+                TextFormat {
+                    font_id: font.clone(),
+                    color: fg,
+                    background: bg,
+                    ..Default::default()
+                },
+            );
+        } else {
+            append_syntax(&mut job, line, &font, default);
+        }
     }
     job
 }

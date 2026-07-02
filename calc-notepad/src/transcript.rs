@@ -1,86 +1,48 @@
-//! Единое поле-«блокнот»: стек строк-выражений, под каждой — результат (зелёный).
-//! Ввод и вывод в одном поле, пересчёт по ENTER — как в оригинале «Чиста калькулятор».
+//! Единое поле-«блокнот»: один многострочный редактор egui (нативные курсор,
+//! стрелки, выделение, ENTER), где строки-результаты вписаны в тот же текст.
+//! Пересчёт по ENTER; строки-результаты — на зелёном/красном фоне (через layouter).
 
-/// Что произошло за кадр.
-pub struct Action {
-    /// Текст какой-либо строки изменился.
-    pub changed: bool,
-    /// В строке с этим индексом нажали ENTER (нужно пересчитать/добавить строку).
-    pub entered: Option<usize>,
-}
+use crate::sheet::Sheet;
 
-/// Рисует единое поле: для каждой строки — редактируемое выражение и под ним,
-/// если есть, результат на зелёном (ошибка — на красном) фоне.
-pub fn show(
-    ui: &mut egui::Ui,
-    entries: &mut [String],
-    results: &[Option<(String, bool)>],
-    font_size: f32,
-    focus: &mut Option<usize>,
-) -> Action {
-    let mut action = Action { changed: false, entered: None };
+/// Рисует единое поле. Возвращает true, если по ENTER произошёл пересчёт.
+pub fn show(ui: &mut egui::Ui, sheet: &mut Sheet, font_size: f32) -> bool {
     let font = egui::FontId::monospace(font_size);
+    // Проверяем ENTER ДО отрисовки: TextEdit его поглотит (вставит перевод строки).
+    let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
+    let error_lines = sheet.error_lines.clone();
 
-    egui::ScrollArea::vertical()
+    let out = egui::ScrollArea::both()
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            for (i, entry) in entries.iter_mut().enumerate() {
-                // Подсветка синтаксиса выражения тем же лексером ядра.
-                let mut layouter = |ui: &egui::Ui, text: &str, _w: f32| {
-                    let mut job = crate::highlight::layout_job(text, font_size);
-                    job.wrap.max_width = f32::INFINITY;
-                    ui.fonts(|f| f.layout_job(job))
-                };
-                let resp = ui.add(
-                    egui::TextEdit::singleline(entry)
-                        .frame(false)
-                        .desired_width(f32::INFINITY)
-                        .font(font.clone())
-                        .layouter(&mut layouter),
-                );
-                if resp.changed() {
-                    action.changed = true;
-                }
-                if *focus == Some(i) {
-                    resp.request_focus();
-                    *focus = None;
-                }
-                if resp.lost_focus() && ui.input(|inp| inp.key_pressed(egui::Key::Enter)) {
-                    action.entered = Some(i);
-                }
+            let mut layouter = |ui: &egui::Ui, text: &str, _w: f32| {
+                let mut job = crate::highlight::sheet_layout_job(text, font_size, &error_lines);
+                job.wrap.max_width = f32::INFINITY;
+                ui.fonts(|f| f.layout_job(job))
+            };
+            egui::TextEdit::multiline(&mut sheet.text)
+                .frame(false)
+                .desired_width(f32::INFINITY)
+                .font(font.clone())
+                .layouter(&mut layouter)
+                .show(ui)
+        })
+        .inner;
 
-                // Строка-результат под выражением (как зелёный бокс оригинала).
-                if let Some((text, is_err)) = results.get(i).and_then(|o| o.as_ref()) {
-                    let (bg, fg) = if *is_err {
-                        (
-                            egui::Color32::from_rgb(0x4a, 0x1c, 0x1c),
-                            egui::Color32::from_rgb(0xff, 0xb3, 0xb3),
-                        )
-                    } else {
-                        (
-                            egui::Color32::from_rgb(0x2f, 0x7d, 0x3f),
-                            egui::Color32::from_rgb(0xe8, 0xff, 0xe8),
-                        )
-                    };
-                    ui.horizontal(|ui| {
-                        ui.add_space(font_size); // небольшой отступ слева, как в оригинале
-                        egui::Frame::none()
-                            .fill(bg)
-                            .inner_margin(egui::Margin::symmetric(6.0, 1.0))
-                            .rounding(egui::Rounding::same(2.0))
-                            .show(ui, |ui| {
-                                ui.add(
-                                    egui::Label::new(
-                                        egui::RichText::new(text).monospace().size(font_size).color(fg),
-                                    )
-                                    .wrap(),
-                                );
-                            });
-                    });
-                }
-            }
-        });
-
-    action
+    if enter_pressed && out.response.has_focus() {
+        // Курсор уже после вставленного egui перевода строки.
+        let cursor = out
+            .state
+            .cursor
+            .char_range()
+            .map(|r| r.primary.index)
+            .unwrap_or(0);
+        let new_cursor = sheet.recompute_with_cursor(cursor);
+        let mut st = out.state.clone();
+        st.cursor.set_char_range(Some(egui::text::CCursorRange::one(
+            egui::text::CCursor::new(new_cursor),
+        )));
+        st.store(ui.ctx(), out.response.id);
+        return true;
+    }
+    false
 }

@@ -1,7 +1,7 @@
-use crate::notebook::Notebook;
+use crate::sheet::Sheet;
 
 pub struct NotepadApp {
-    nb: Notebook,
+    sheet: Sheet,
     builtins: Vec<String>,
     font_size: f32,
     always_on_top: bool,
@@ -16,7 +16,7 @@ impl NotepadApp {
         let seed = "цена = 1990\nштук = 12\nцена * штук\nIntToRoman(2024)".to_string();
         let text = if st.text.is_empty() { seed } else { st.text };
         NotepadApp {
-            nb: Notebook::from_text(&text),
+            sheet: Sheet::from_input(&text),
             builtins: calc_core::Session::new().builtin_names(),
             font_size: st.font_size,
             always_on_top: st.always_on_top,
@@ -30,7 +30,7 @@ impl NotepadApp {
         crate::settings::save(&crate::settings::Settings {
             font_size: self.font_size,
             always_on_top: self.always_on_top,
-            text: self.nb.text(),
+            text: self.sheet.input(), // храним только ввод (результаты пересчитаются)
         });
     }
 }
@@ -60,14 +60,14 @@ impl eframe::App for NotepadApp {
             self.show_help = !self.show_help;
         }
         if acts.clear {
-            self.nb.clear();
+            self.sheet = Sheet::from_input("");
             self.persist();
         }
         if acts.open {
             if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc", "txt"]).pick_file() {
                 match std::fs::read_to_string(&path) {
                     Ok(s) => {
-                        self.nb.set_text(&s);
+                        self.sheet = Sheet::from_input(&s);
                         self.persist();
                         self.status = Some(format!("Открыто: {}", path.display()));
                     }
@@ -77,34 +77,26 @@ impl eframe::App for NotepadApp {
         }
         if acts.save {
             if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc"]).save_file() {
-                self.status = Some(match std::fs::write(&path, self.nb.text()) {
+                self.status = Some(match std::fs::write(&path, self.sheet.input()) {
                     Ok(()) => format!("Сохранено: {}", path.display()),
                     Err(e) => format!("Ошибка сохранения: {e}"),
                 });
             }
         }
 
-        // Окно-справочник функций; клик вставляет имя в последнюю строку.
+        // Окно-справочник функций; клик добавляет имя новой строкой ввода.
         if let Some(name) = crate::panels::help_window(ctx, &mut self.show_help, &self.builtins) {
-            if let Some(last) = self.nb.entries.last_mut() {
-                last.push_str(&name);
-                last.push('(');
+            let mut inp = self.sheet.input();
+            if !inp.is_empty() {
+                inp.push('\n');
             }
+            inp.push_str(&name);
+            inp.push('(');
+            self.sheet = Sheet::from_input(&inp);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let action = crate::transcript::show(
-                ui,
-                &mut self.nb.entries,
-                &self.nb.results,
-                self.font_size,
-                &mut self.nb.focus,
-            );
-            if action.changed {
-                self.persist();
-            }
-            if let Some(i) = action.entered {
-                self.nb.handle_enter(i);
+            if crate::transcript::show(ui, &mut self.sheet, self.font_size) {
                 self.persist();
             }
         });
