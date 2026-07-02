@@ -12,16 +12,16 @@ pub fn code_with_results(ui: &mut egui::Ui, text: &mut String, doc: &Document, f
     let mut changed = false;
     let font = egui::FontId::monospace(font_size);
     let row_h = ui.fonts(|f| f.row_height(&font));
-    egui::ScrollArea::vertical()
+    egui::ScrollArea::both()
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.horizontal_top(|ui| {
                 let total = ui.available_width();
                 let editor_w = total * 0.72;
                 let line_count = text.split('\n').count().max(1);
-                let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
+                let mut layouter = |ui: &egui::Ui, text: &str, _wrap_width: f32| {
                     let mut job = crate::highlight::layout_job(text, font_size);
-                    job.wrap.max_width = wrap_width;
+                    job.wrap.max_width = f32::INFINITY; // без переноса: одна лог. строка = одна визуальная
                     ui.fonts(|f| f.layout_job(job))
                 };
                 let resp = ui.add_sized(
