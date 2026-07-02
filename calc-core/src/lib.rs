@@ -67,12 +67,14 @@ impl Session {
     pub fn eval(&mut self, src: &str) -> error::Result<Value> {
         let toks = lexer::tokenize(src)?;
         let stmts = parser::Parser::new(toks).parse_program()?;
-        let v = self.ev.run(&stmts)?;
+        // Выполнить, затем ВСЕГДA сбросить накопленный print-вывод — даже если
+        // одна из инструкций упала с ошибкой (частичный вывод не должен теряться).
+        let result = self.ev.run(&stmts);
         let out = self.ev.take_output();
         if !out.is_empty() {
             print!("{out}");
         }
-        Ok(v)
+        result
     }
 
     /// Построчно выполнить документ с чистого состояния (best-effort).

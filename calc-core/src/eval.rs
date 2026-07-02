@@ -12,6 +12,8 @@ impl Evaluator {
     pub fn set_call_limit(&mut self, n: u64) { self.call_limit = n; }
     pub fn set_expr_limit(&mut self, n: u64) { self.expr_limit = n; }
     pub fn take_output(&mut self) -> String { std::mem::take(&mut self.output) }
+    // #[inline(never)]: inlining into the recursive eval_expr_inner grows its per-frame
+    // stack size and can trip the 512-deep recursion test on the 2 MB test-thread stack.
     #[inline(never)]
     fn capture_print(&mut self, vals: &[Value], pos: usize) -> Result<Value> {
         if vals.is_empty() {
@@ -55,9 +57,8 @@ impl Evaluator {
             Expr::Call { name, args, pos } => {
                 let real = self.env.aliases.get(name).cloned().unwrap_or_else(|| name.clone());
                 let vals: Vec<Value> = args.iter().map(|a| self.eval_expr(a)).collect::<Result<_>>()?;
-                if real == "print" {
-                    return self.capture_print(&vals, *pos);
-                }
+                // Пользовательская функция имеет приоритет над встроенными, включая print:
+                // `fn print(n) = ...` должна затенять встроенный print, как любой другой builtin.
                 if let Some(uf) = self.env.funcs.get(&real).cloned() {
                     if uf.params.len() != vals.len() {
                         return Err(CalcError::WrongParams { func: real, expected: uf.params.len().to_string(), got: vals.len(), pos: *pos });
@@ -78,6 +79,8 @@ impl Evaluator {
                     self.env.pop_scope();
                     self.call_depth -= 1;
                     out
+                } else if real == "print" {
+                    self.capture_print(&vals, *pos)
                 } else if let Some(f) = self.registry.get(&real) {
                     f(&vals, *pos)
                 } else {
@@ -349,5 +352,9 @@ mod tests {
         let mut ev = Evaluator::new();
         ev.run(&stmts).unwrap();
         assert_eq!(ev.take_output(), "7\n");
+    }
+    #[test]
+    fn user_fn_can_shadow_print() {
+        assert_eq!(run("fn print(n) = n*2; print(5)"), Value::Int(10));
     }
 }
