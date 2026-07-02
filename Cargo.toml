@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["calc-core", "calc-cli"]
+members = ["calc-core", "calc-cli", "calc-notepad"]
 
 [workspace.package]
 edition = "2021"
