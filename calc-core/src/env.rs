@@ -21,6 +21,9 @@ impl Env {
         for s in self.scopes.iter().rev() { if let Some(v) = s.get(name) { return Some(v.clone()); } }
         None
     }
+    pub fn globals(&self) -> Vec<(String, Value)> {
+        self.scopes.first().map(|s| s.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default()
+    }
 }
 impl Default for Env { fn default() -> Self { Self::new() } }
 
@@ -53,5 +56,13 @@ mod tests {
         env.assign("x", Value::Int(9));
         env.pop_scope();
         assert_eq!(env.get_var("x"), Some(Value::Int(9)));
+    }
+    #[test]
+    fn globals_lists_top_scope() {
+        let mut env = Env::new();
+        env.set_var("a", Value::Int(1));
+        env.set_var("b", Value::Str("x".into()));
+        let mut g = env.globals(); g.sort_by(|x,y| x.0.cmp(&y.0));
+        assert_eq!(g, vec![("a".to_string(), Value::Int(1)), ("b".to_string(), Value::Str("x".into()))]);
     }
 }
