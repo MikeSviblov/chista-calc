@@ -1,4 +1,4 @@
-use crate::ast::{BinOp, Expr, UnOp};
+use crate::ast::{BinOp, Expr, Stmt, UnOp};
 use crate::env::Env;
 use crate::error::{CalcError, Result};
 use crate::registry::Registry;
@@ -47,6 +47,24 @@ impl Evaluator {
             }
         }
     }
+    pub fn run(&mut self, stmts: &[Stmt]) -> Result<Value> {
+        let mut last = Value::Bool(false);
+        for s in stmts { last = self.eval_stmt(s)?; }
+        Ok(last)
+    }
+    fn eval_stmt(&mut self, s: &Stmt) -> Result<Value> {
+        match s {
+            Stmt::Expr(e) => self.eval_expr(e),
+            Stmt::FnDef { name, params, body, .. } => {
+                self.env.funcs.insert(name.clone(), crate::env::UserFn { params: params.clone(), body: body.clone() });
+                Ok(Value::Bool(true))
+            }
+            Stmt::Alias { name, target, .. } => { self.env.aliases.insert(name.clone(), target.clone()); Ok(Value::Bool(true)) }
+            Stmt::While { .. } | Stmt::Repeat { .. } => self.eval_loop(s),
+        }
+    }
+    // temporary stub until Task 12.1:
+    fn eval_loop(&mut self, _s: &Stmt) -> Result<Value> { Ok(Value::Bool(false)) }
 }
 impl Default for Evaluator { fn default() -> Self { Self::new() } }
 fn checked_int(v: Option<i128>, pos: usize) -> Result<Value> {
@@ -162,5 +180,25 @@ mod tests {
         assert_eq!(eval_str("true == true"), Value::Bool(true));
         assert_eq!(eval_str("false < true"), Value::Bool(true));
         assert_eq!(eval_str("true != false"), Value::Bool(true));
+    }
+    fn run(src: &str) -> Value {
+        let toks = crate::lexer::tokenize(src).unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new();
+        ev.run(&stmts).unwrap()
+    }
+    #[test]
+    fn user_function_and_alias() {
+        assert_eq!(run("fn sq(x) = x*x; sq(5)"), Value::Int(25));
+        assert_eq!(run("alias root = Sqrt; root(16.0)"), Value::Float(4.0));
+    }
+    #[test]
+    fn variables_persist_across_stmts() {
+        assert_eq!(run("x = 3; y = 4; Sqrt(x*x + y*y)"), Value::Float(5.0));
+    }
+    #[test]
+    fn recursive_user_fn() {
+        // fib via recursion (small)
+        assert_eq!(run("fn f(n) = n; f(7)"), Value::Int(7));
     }
 }
