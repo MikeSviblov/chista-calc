@@ -4,6 +4,8 @@ use crate::error::{CalcError, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64, output: String }
+#[derive(Debug)]
+pub enum StmtOutcome { Value(Value), Defined, Error(CalcError) }
 impl Evaluator {
     pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512, expr_depth: 0, expr_limit: 150, output: String::new() } }
     pub fn set_loop_limit(&mut self, n: u64) { self.loop_limit = n; }
@@ -88,6 +90,18 @@ impl Evaluator {
         let mut last = Value::Bool(false);
         for s in stmts { last = self.eval_stmt(s)?; }
         Ok(last)
+    }
+    pub fn run_document(&mut self, stmts: &[Stmt]) -> Vec<(usize, StmtOutcome)> {
+        let mut out = Vec::with_capacity(stmts.len());
+        for s in stmts {
+            let pos = crate::ast::stmt_pos(s);
+            let outcome = match s {
+                Stmt::FnDef { .. } | Stmt::Alias { .. } => match self.eval_stmt(s) { Ok(_) => StmtOutcome::Defined, Err(e) => StmtOutcome::Error(e) },
+                _ => match self.eval_stmt(s) { Ok(v) => StmtOutcome::Value(v), Err(e) => StmtOutcome::Error(e) },
+            };
+            out.push((pos, outcome));
+        }
+        out
     }
     fn eval_stmt(&mut self, s: &Stmt) -> Result<Value> {
         match s {
