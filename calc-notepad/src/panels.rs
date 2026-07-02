@@ -133,7 +133,8 @@ fn list_functions(ui: &mut egui::Ui, state: &mut HelpState) {
     }
 }
 
-/// Рисует правую панель — статью выбранной функции. Возвращает Some(name) при «Вставить».
+/// Рисует правую панель — статью выбранной функции. Возвращает текст для вставки:
+/// `Имя(` по «Вставить» или готовый пример по «Попробовать».
 fn detail_pane(ui: &mut egui::Ui, state: &HelpState) -> Option<String> {
     let mut insert = None;
     let entry = state
@@ -147,7 +148,8 @@ fn detail_pane(ui: &mut egui::Ui, state: &HelpState) -> Option<String> {
     ui.horizontal(|ui| {
         ui.heading(e.signature);
         if ui.button("Вставить").clicked() {
-            insert = Some(e.name.to_string());
+            // Незаконченный вызов — курсор внутри скобок, результат молчит.
+            insert = Some(format!("{}(", e.name));
         }
     });
     ui.weak(calc_core::help::category_label(e.category));
@@ -160,7 +162,13 @@ fn detail_pane(ui: &mut egui::Ui, state: &HelpState) -> Option<String> {
         ui.label(e.summary_en);
         ui.end_row();
         ui.strong("Пример");
-        ui.monospace(e.example);
+        ui.horizontal(|ui| {
+            ui.monospace(e.example);
+            // «Попробовать» — вставляет готовый пример в блокнот и сразу считает.
+            if ui.button("Попробовать").clicked() {
+                insert = Some(e.example.to_string());
+            }
+        });
         ui.end_row();
     });
     if !e.note_ru.is_empty() || !e.note_en.is_empty() {

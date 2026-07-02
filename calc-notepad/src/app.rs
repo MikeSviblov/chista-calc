@@ -82,14 +82,14 @@ impl eframe::App for NotepadApp {
             }
         }
 
-        // Окно справки; «Вставить» добавляет вызов функции новой строкой ввода.
-        if let Some(name) = crate::panels::help_window(ctx, &mut self.help) {
+        // Окно справки добавляет строку ввода: «Вставить» — `Имя(`, «Попробовать» —
+        // готовый пример (Sheet::from_input сразу его вычислит).
+        if let Some(text) = crate::panels::help_window(ctx, &mut self.help) {
             let mut inp = self.sheet.input();
             if !inp.is_empty() {
                 inp.push('\n');
             }
-            inp.push_str(&name);
-            inp.push('(');
+            inp.push_str(&text);
             self.sheet = Sheet::from_input(&inp);
         }
 
