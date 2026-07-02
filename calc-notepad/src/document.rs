@@ -5,8 +5,10 @@ use std::collections::{HashMap, HashSet};
 pub struct Document {
     results: HashMap<usize, String>,
     errors: HashSet<usize>,
+    /// Накопленный вывод print/циклов. Пока не отображается в едином поле —
+    /// зарезервировано для будущего показа рядом с результатом.
+    #[allow(dead_code)]
     pub output: String,
-    pub variables: Vec<(String, String)>,
 }
 
 impl Document {
@@ -18,18 +20,30 @@ impl Document {
         for l in &d.lines {
             let text = match &l.outcome {
                 DocLineOutcome::Value(v) => Some(v.to_string()),
-                DocLineOutcome::Error(e) => { errors.insert(l.line); Some(e.to_string()) }
+                DocLineOutcome::Error(e) => {
+                    errors.insert(l.line);
+                    Some(e.to_string())
+                }
                 DocLineOutcome::Defined => None,
             };
             if let Some(t) = text {
-                results.entry(l.line).and_modify(|acc: &mut String| { acc.push_str(", "); acc.push_str(&t); }).or_insert(t);
+                results
+                    .entry(l.line)
+                    .and_modify(|acc: &mut String| {
+                        acc.push_str(", ");
+                        acc.push_str(&t);
+                    })
+                    .or_insert(t);
             }
         }
-        let variables = s.variables().into_iter().map(|(k, v)| (k, v.to_string())).collect();
-        Document { results, errors, output: d.output, variables }
+        Document { results, errors, output: d.output }
     }
-    pub fn result_for_line(&self, line: usize) -> Option<String> { self.results.get(&line).cloned() }
-    pub fn is_error_line(&self, line: usize) -> bool { self.errors.contains(&line) }
+    pub fn result_for_line(&self, line: usize) -> Option<String> {
+        self.results.get(&line).cloned()
+    }
+    pub fn is_error_line(&self, line: usize) -> bool {
+        self.errors.contains(&line)
+    }
 }
 
 #[cfg(test)]
@@ -51,7 +65,7 @@ mod tests {
         assert!(doc.is_error_line(1));
     }
     #[test]
-    fn print_goes_to_output_panel() {
+    fn print_captured_in_output() {
         let doc = Document::evaluate("print(2+2)");
         assert_eq!(doc.output, "4\n");
     }
