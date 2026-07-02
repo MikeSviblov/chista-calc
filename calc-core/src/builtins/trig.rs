@@ -78,5 +78,9 @@ mod tests {
         assert!((callf("Cos", 0.0) - 1.0).abs() < 1e-12);
         assert!((callf("DegToRad", 180.0) - std::f64::consts::PI).abs() < 1e-12);
         assert!((callf("RadToDeg", std::f64::consts::PI) - 180.0).abs() < 1e-9);
+        assert!(callf("Tan", 0.0).abs() < 1e-12);
+        assert!(callf("SinH", 0.0).abs() < 1e-12);
+        assert!((callf("ArcSin", 1.0) - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+        assert!((callf("Cotan", std::f64::consts::FRAC_PI_4) - 1.0).abs() < 1e-12);
     }
 }

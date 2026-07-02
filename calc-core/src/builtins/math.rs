@@ -4,7 +4,8 @@ use crate::registry::Registry;
 use crate::value::Value;
 
 fn to_i128_checked(f: f64, pos: Pos) -> Result<i128> {
-    if f.is_finite() && f >= i128::MIN as f64 && f <= i128::MAX as f64 {
+    // 2^127 округляется вверх за i128::MAX, поэтому верхняя граница строгая.
+    if f.is_finite() && f >= -(2f64.powi(127)) && f < 2f64.powi(127) {
         Ok(f as i128)
     } else {
         Err(CalcError::RangeError { msg: "переполнение".into(), pos })
@@ -219,5 +220,27 @@ mod tests {
     fn fact_negative_and_overflow_error() {
         assert!(Registry::with_builtins().get("Fact").unwrap()(&[Value::Int(-1)], 0).is_err());
         assert!(Registry::with_builtins().get("Fact").unwrap()(&[Value::Int(100)], 0).is_err()); // overflows i128
+    }
+    #[test]
+    fn no_panic_edge_cases() {
+        fn err(name: &str, a: &[Value]) -> bool { Registry::with_builtins().get(name).unwrap()(a, 0).is_err() }
+        assert!(err("Sqr", &[Value::Int(i128::MAX)]));            // overflow
+        assert!(err("Pow", &[Value::Int(10), Value::Int(200)]));  // overflow
+        assert!(err("Gcd", &[Value::Int(i128::MIN), Value::Int(5)]));
+        assert!(err("Lcm", &[Value::Int(i128::MIN), Value::Int(5)]));
+        assert!(err("Floor", &[Value::Float(1e40)]));             // out of i128 range
+        assert!(err("Floor", &[Value::Float(2f64.powi(127))]));   // 2^127 округляется за i128::MAX
+        assert!(err("Min", &[]));                                  // zero args
+        assert!(err("Max", &[]));
+    }
+    #[test]
+    fn more_math_values() {
+        fn f(name: &str, a: &[Value]) -> f64 { match Registry::with_builtins().get(name).unwrap()(a,0).unwrap() { Value::Float(v)=>v, _=>panic!() } }
+        assert!((f("Ln", &[Value::Float(std::f64::consts::E)]) - 1.0).abs() < 1e-12);
+        assert!((f("Log2", &[Value::Float(8.0)]) - 3.0).abs() < 1e-12);
+        assert!((f("Log10", &[Value::Float(1000.0)]) - 3.0).abs() < 1e-12);
+        assert!((f("Log", &[Value::Float(81.0), Value::Float(3.0)]) - 4.0).abs() < 1e-12);
+        assert!((f("Exp", &[Value::Float(0.0)]) - 1.0).abs() < 1e-12);
+        assert!((f("Frac", &[Value::Float(2.25)]) - 0.25).abs() < 1e-12);
     }
 }
