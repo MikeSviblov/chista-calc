@@ -49,9 +49,9 @@ mod tests {
         let path = std::env::temp_dir().join(format!("calc_io_{}.txt", std::process::id()));
         let p = s(path.to_str().unwrap());
         call("StrToFile", &[p.clone(), s("данные")]);
-        assert_eq!(call("FileToStr", &[p.clone()]), s("данные"));
+        assert_eq!(call("FileToStr", std::slice::from_ref(&p)), s("данные"));
         call("AppendFile", &[p.clone(), s("+ещё")]);
-        assert_eq!(call("FileToStr", &[p.clone()]), s("данные+ещё"));
+        assert_eq!(call("FileToStr", std::slice::from_ref(&p)), s("данные+ещё"));
         let _ = std::fs::remove_file(&path);
     }
     #[test]
