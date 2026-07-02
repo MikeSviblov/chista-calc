@@ -63,8 +63,41 @@ impl Evaluator {
             Stmt::While { .. } | Stmt::Repeat { .. } => self.eval_loop(s),
         }
     }
-    // temporary stub until Task 12.1:
-    fn eval_loop(&mut self, _s: &Stmt) -> Result<Value> { Ok(Value::Bool(false)) }
+    fn exec_block(&mut self, body: &[Stmt]) -> Result<Value> {
+        self.env.push_scope();
+        let mut last = Value::Bool(false);
+        let mut result = Ok(());
+        for st in body {
+            match self.eval_stmt(st) { Ok(v) => last = v, Err(e) => { result = Err(e); break; } }
+        }
+        self.env.pop_scope();
+        result.map(|_| last)
+    }
+    fn eval_loop(&mut self, s: &Stmt) -> Result<Value> {
+        let mut iters: u64 = 0;
+        let mut last = Value::Bool(false);
+        match s {
+            Stmt::Repeat { count, body, pos } => {
+                let n = self.eval_expr(count)?.as_int(*pos)?;
+                let mut k: i128 = 0;
+                while k < n {
+                    iters += 1;
+                    if iters > self.loop_limit { return Err(CalcError::LoopLimitExceeded { limit: self.loop_limit }); }
+                    last = self.exec_block(body)?;
+                    k += 1;
+                }
+            }
+            Stmt::While { cond, body, .. } => {
+                while self.eval_expr(cond)?.truthy() {
+                    iters += 1;
+                    if iters > self.loop_limit { return Err(CalcError::LoopLimitExceeded { limit: self.loop_limit }); }
+                    last = self.exec_block(body)?;
+                }
+            }
+            _ => unreachable!(),
+        }
+        Ok(last)
+    }
 }
 impl Default for Evaluator { fn default() -> Self { Self::new() } }
 fn checked_int(v: Option<i128>, pos: usize) -> Result<Value> {
@@ -201,4 +234,19 @@ mod tests {
         // fib via recursion (small)
         assert_eq!(run("fn f(n) = n; f(7)"), Value::Int(7));
     }
+    #[test]
+    fn repeat_accumulates() { assert_eq!(run("s = 0; repeat 5 { s = s + 1 }; s"), Value::Int(5)); }
+    #[test]
+    fn while_counts_down() { assert_eq!(run("n = 3; c = 0; while (n > 0) { n = n - 1; c = c + 1 }; c"), Value::Int(3)); }
+    #[test]
+    fn nested_loops() { assert_eq!(run("t = 0; repeat 3 { repeat 4 { t = t + 1 } }; t"), Value::Int(12)); }
+    #[test]
+    fn infinite_loop_hits_limit() {
+        let toks = crate::lexer::tokenize("while (1 == 1) { }").unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new(); ev.set_loop_limit(1000);
+        assert!(matches!(ev.run(&stmts), Err(crate::error::CalcError::LoopLimitExceeded { .. })));
+    }
+    #[test]
+    fn repeat_negative_count_is_noop() { assert_eq!(run("s = 5; repeat -3 { s = s + 1 }; s"), Value::Int(5)); }
 }
