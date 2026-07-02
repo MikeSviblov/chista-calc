@@ -5,6 +5,16 @@ version.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+digest = "0.10"
+md-5 = "0.10"
+sha1 = "0.10"
+sha2 = "0.10"
+sha3 = "0.10"
+ripemd = "0.1"
+tiger = "0.2"
+crc32fast = "1"
+adler = "1"
+hex = "0.4"
 
 [dev-dependencies]
 proptest = "1"

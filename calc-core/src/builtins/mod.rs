@@ -1,5 +1,6 @@
 pub mod bases;
 pub mod bits;
+pub mod hash;
 pub mod math;
 pub mod strings;
 pub mod trig;
@@ -12,6 +13,7 @@ pub fn register_all(r: &mut Registry) {
     bases::register(r);
     bits::register(r);
     strings::register(r);
+    hash::register(r);
 }
 pub(crate) fn arity(args: &[Value], n: usize, func: &str, pos: usize) -> Result<()> {
     if args.len() != n {
