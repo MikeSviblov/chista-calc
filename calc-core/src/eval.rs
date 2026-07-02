@@ -3,10 +3,11 @@ use crate::env::Env;
 use crate::error::{CalcError, Result};
 use crate::registry::Registry;
 use crate::value::Value;
-pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64 }
+pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64 }
 impl Evaluator {
-    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000 } }
+    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512 } }
     pub fn set_loop_limit(&mut self, n: u64) { self.loop_limit = n; }
+    pub fn set_call_limit(&mut self, n: u64) { self.call_limit = n; }
     pub fn eval_expr(&mut self, e: &Expr) -> Result<Value> {
         match e {
             Expr::Int(i, _) => Ok(Value::Int(*i)),
@@ -34,10 +35,16 @@ impl Evaluator {
                     if uf.params.len() != vals.len() {
                         return Err(CalcError::WrongParams { func: real, expected: uf.params.len().to_string(), got: vals.len(), pos: *pos });
                     }
+                    self.call_depth += 1;
+                    if self.call_depth > self.call_limit {
+                        self.call_depth -= 1;
+                        return Err(CalcError::CallDepthExceeded { limit: self.call_limit });
+                    }
                     self.env.push_scope();
                     for (p, v) in uf.params.iter().zip(vals) { self.env.set_var(p, v); }
                     let out = self.eval_expr(&uf.body);
                     self.env.pop_scope();
+                    self.call_depth -= 1;
                     out
                 } else if let Some(f) = self.registry.get(&real) {
                     f(&vals, *pos)
@@ -81,25 +88,29 @@ impl Evaluator {
                 let n = self.eval_expr(count)?.as_int(*pos)?;
                 let mut k: i128 = 0;
                 while k < n {
-                    iters += 1;
-                    if iters > self.loop_limit { return Err(CalcError::LoopLimitExceeded { limit: self.loop_limit }); }
+                    tick(&mut iters, self.loop_limit)?;
                     last = self.exec_block(body)?;
                     k += 1;
                 }
             }
             Stmt::While { cond, body, .. } => {
                 while self.eval_expr(cond)?.truthy() {
-                    iters += 1;
-                    if iters > self.loop_limit { return Err(CalcError::LoopLimitExceeded { limit: self.loop_limit }); }
+                    tick(&mut iters, self.loop_limit)?;
                     last = self.exec_block(body)?;
                 }
             }
+            // guarded: eval_stmt only routes Stmt::While/Stmt::Repeat here.
             _ => unreachable!(),
         }
         Ok(last)
     }
 }
 impl Default for Evaluator { fn default() -> Self { Self::new() } }
+fn tick(iters: &mut u64, limit: u64) -> Result<()> {
+    *iters += 1;
+    if *iters > limit { return Err(CalcError::LoopLimitExceeded { limit }); }
+    Ok(())
+}
 fn checked_int(v: Option<i128>, pos: usize) -> Result<Value> {
     v.map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })
 }
@@ -249,4 +260,15 @@ mod tests {
     }
     #[test]
     fn repeat_negative_count_is_noop() { assert_eq!(run("s = 5; repeat -3 { s = s + 1 }; s"), Value::Int(5)); }
+    #[test]
+    fn infinite_recursion_errors_not_aborts() {
+        fn run_res(src: &str) -> crate::error::Result<Value> {
+            let toks = crate::lexer::tokenize(src).unwrap();
+            let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+            let mut ev = Evaluator::new();
+            ev.run(&stmts)
+        }
+        assert!(matches!(run_res("fn f(n) = f(n); f(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
+        assert!(matches!(run_res("fn a(n)=b(n); fn b(n)=a(n); a(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
+    }
 }
