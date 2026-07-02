@@ -3,6 +3,7 @@ pub mod builtins;
 pub mod env;
 pub mod error;
 pub mod eval;
+pub mod help;
 pub mod lexer;
 pub mod parser;
 pub mod registry;
@@ -125,6 +126,16 @@ impl Session {
         n.push("print".to_string());
         n.sort();
         n
+    }
+
+    /// Все статьи справки по встроенным функциям.
+    pub fn help_all(&self) -> &'static [help::HelpEntry] {
+        help::all()
+    }
+
+    /// Статья справки по имени функции (без учёта регистра).
+    pub fn help_for(&self, name: &str) -> Option<&'static help::HelpEntry> {
+        help::lookup(name)
     }
 
     /// Доступ к вычислителю (для будущих фронтендов).

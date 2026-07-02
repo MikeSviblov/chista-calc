@@ -1,4 +1,4 @@
-//! Верхний тулбар и отдельное окно-справочник функций (как «Справка» в оригинале).
+//! Верхний тулбар и окно-справочник функций (двуязычная справка, как «?» в оригинале).
 
 pub struct ToolbarActions {
     pub open: bool,
@@ -53,22 +53,124 @@ pub fn toolbar(ctx: &egui::Context, always_on_top: bool, status: Option<&str>) -
     a
 }
 
-/// Отдельное окно-справочник встроенных функций. Возвращает Some(name), если
-/// пользователь кликнул по имени (для вставки в текущую строку).
-pub fn help_window(ctx: &egui::Context, open: &mut bool, builtins: &[String]) -> Option<String> {
+/// Состояние окна справки: открытость, строка поиска, выбранная функция.
+#[derive(Default)]
+pub struct HelpState {
+    pub open: bool,
+    pub query: String,
+    pub selected: Option<String>,
+}
+
+/// Двухпанельное окно справки. Слева — поиск и список по категориям, справа —
+/// статья выбранной функции. Возвращает Some(name), если нажата «Вставить».
+pub fn help_window(ctx: &egui::Context, state: &mut HelpState) -> Option<String> {
     let mut insert = None;
+    let mut open = state.open;
     egui::Window::new("Справка — функции")
-        .open(open)
-        .default_width(220.0)
+        .open(&mut open)
+        .default_size([580.0, 440.0])
+        .min_width(420.0)
         .show(ctx, |ui| {
-            ui.label("Встроенные функции (клик — вставить):");
-            egui::ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
-                for name in builtins {
-                    if ui.link(name).clicked() {
-                        insert = Some(name.clone());
-                    }
-                }
+            ui.horizontal_top(|ui| {
+                // Левая колонка: поиск + список.
+                ui.vertical(|ui| {
+                    ui.set_width(210.0);
+                    ui.horizontal(|ui| {
+                        ui.label("🔍");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut state.query)
+                                .hint_text("поиск функции")
+                                .desired_width(160.0),
+                        );
+                    });
+                    ui.separator();
+                    egui::ScrollArea::vertical()
+                        .max_height(380.0)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            list_functions(ui, state);
+                        });
+                });
+                ui.separator();
+                // Правая колонка: статья.
+                ui.vertical(|ui| {
+                    insert = detail_pane(ui, state);
+                });
             });
         });
+    state.open = open;
+    insert
+}
+
+/// Рисует сгруппированный по категориям список, фильтруя по строке поиска.
+fn list_functions(ui: &mut egui::Ui, state: &mut HelpState) {
+    let q = state.query.trim().to_lowercase();
+    let matches = |e: &calc_core::help::HelpEntry| -> bool {
+        if q.is_empty() {
+            return true;
+        }
+        e.name.to_lowercase().contains(&q)
+            || e.summary_ru.to_lowercase().contains(&q)
+            || e.summary_en.to_lowercase().contains(&q)
+    };
+    for (key, label) in calc_core::help::CATEGORIES {
+        let mut in_cat: Vec<&calc_core::help::HelpEntry> = calc_core::help::all()
+            .iter()
+            .filter(|e| e.category == *key && matches(e))
+            .collect();
+        if in_cat.is_empty() {
+            continue;
+        }
+        in_cat.sort_by(|a, b| a.name.cmp(b.name));
+        ui.add_space(4.0);
+        ui.strong(*label);
+        for e in in_cat {
+            let selected = state.selected.as_deref() == Some(e.name);
+            if ui.selectable_label(selected, e.name).clicked() {
+                state.selected = Some(e.name.to_string());
+            }
+        }
+    }
+}
+
+/// Рисует правую панель — статью выбранной функции. Возвращает Some(name) при «Вставить».
+fn detail_pane(ui: &mut egui::Ui, state: &HelpState) -> Option<String> {
+    let mut insert = None;
+    let entry = state
+        .selected
+        .as_deref()
+        .and_then(calc_core::help::lookup);
+    let Some(e) = entry else {
+        ui.weak("Выберите функцию в списке слева.");
+        return None;
+    };
+    ui.horizontal(|ui| {
+        ui.heading(e.signature);
+        if ui.button("Вставить").clicked() {
+            insert = Some(e.name.to_string());
+        }
+    });
+    ui.weak(calc_core::help::category_label(e.category));
+    ui.add_space(6.0);
+    egui::Grid::new("help_detail").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+        ui.strong("RU");
+        ui.label(e.summary_ru);
+        ui.end_row();
+        ui.strong("EN");
+        ui.label(e.summary_en);
+        ui.end_row();
+        ui.strong("Пример");
+        ui.monospace(e.example);
+        ui.end_row();
+    });
+    if !e.note_ru.is_empty() || !e.note_en.is_empty() {
+        ui.add_space(6.0);
+        if !e.note_ru.is_empty() {
+            ui.weak(format!("⚠ {}", e.note_ru));
+        }
+        if !e.note_en.is_empty() {
+            ui.weak(format!("⚠ {}", e.note_en));
+        }
+    }
     insert
 }

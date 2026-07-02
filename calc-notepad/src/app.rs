@@ -2,12 +2,11 @@ use crate::sheet::Sheet;
 
 pub struct NotepadApp {
     sheet: Sheet,
-    builtins: Vec<String>,
     font_size: f32,
     always_on_top: bool,
     first_frame: bool,
     status: Option<String>,
-    show_help: bool,
+    help: crate::panels::HelpState,
 }
 
 impl NotepadApp {
@@ -17,12 +16,11 @@ impl NotepadApp {
         let text = if st.text.is_empty() { seed } else { st.text };
         NotepadApp {
             sheet: Sheet::from_input(&text),
-            builtins: calc_core::Session::new().builtin_names(),
             font_size: st.font_size,
             always_on_top: st.always_on_top,
             first_frame: true,
             status: None,
-            show_help: false,
+            help: crate::panels::HelpState::default(),
         }
     }
 
@@ -57,7 +55,7 @@ impl eframe::App for NotepadApp {
             self.persist();
         }
         if acts.toggle_help {
-            self.show_help = !self.show_help;
+            self.help.open = !self.help.open;
         }
         if acts.clear {
             self.sheet = Sheet::from_input("");
@@ -84,8 +82,8 @@ impl eframe::App for NotepadApp {
             }
         }
 
-        // Окно-справочник функций; клик добавляет имя новой строкой ввода.
-        if let Some(name) = crate::panels::help_window(ctx, &mut self.show_help, &self.builtins) {
+        // Окно справки; «Вставить» добавляет вызов функции новой строкой ввода.
+        if let Some(name) = crate::panels::help_window(ctx, &mut self.help) {
             let mut inp = self.sheet.input();
             if !inp.is_empty() {
                 inp.push('\n');
