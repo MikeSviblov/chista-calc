@@ -2,14 +2,17 @@ use crate::ast::{BinOp, Expr, Stmt, UnOp};
 use crate::error::{CalcError, Result};
 use crate::lexer::{Token, TokenKind};
 
+const MAX_DEPTH: usize = 256;
+
 pub struct Parser {
     tokens: Vec<Token>,
     i: usize,
+    depth: usize,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, i: 0 }
+        Parser { tokens, i: 0, depth: 0 }
     }
 
     fn peek(&self) -> &TokenKind {
@@ -38,13 +41,16 @@ impl Parser {
     }
 
     fn eat_ident(&mut self) -> Result<String> {
-        let tok = self.advance();
-        match tok.kind {
-            TokenKind::Ident(s) => Ok(s),
-            other => Err(CalcError::SyntaxError {
-                msg: format!("Ожидался идентификатор, но встретилось {:?}", other),
-                pos: tok.pos,
-            }),
+        if matches!(self.peek(), TokenKind::Ident(_)) {
+            match self.advance().kind {
+                TokenKind::Ident(s) => Ok(s),
+                _ => unreachable!(),
+            }
+        } else {
+            Err(CalcError::SyntaxError {
+                msg: format!("Ожидался идентификатор, но встретилось {:?}", self.peek()),
+                pos: self.peek_pos(),
+            })
         }
     }
 
@@ -135,7 +141,30 @@ impl Parser {
         }
     }
 
+    /// Pratt-парсер выражений с приоритетами операторов.
+    ///
+    /// Лестница приоритетов (от самого слабого к самому сильному связыванию):
+    /// `||` → `&&` → сравнения (`== != < <= > >=`) → `+ -` → `* / %` →
+    /// унарные `- !` → `^` (право-ассоциативный).
+    ///
+    /// Числа `(left_bp, right_bp)` кодируют это: оператор захватывается в led-цикл,
+    /// только если его `left_bp >= min_bp`; правый операнд парсится с `right_bp`.
+    /// Право-ассоциативность `^` задаётся `right_bp < left_bp` (13 < 14).
     fn parse_expr(&mut self, min_bp: u8) -> Result<Expr> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            self.depth -= 1;
+            return Err(CalcError::SyntaxError {
+                msg: "Слишком глубокая вложенность выражения".into(),
+                pos: self.peek_pos(),
+            });
+        }
+        let result = self.parse_expr_inner(min_bp);
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_expr_inner(&mut self, min_bp: u8) -> Result<Expr> {
         let mut lhs = self.parse_nud()?;
 
         if min_bp == 0 && matches!(self.peek(), TokenKind::Eq) {
@@ -255,7 +284,13 @@ mod tests {
         }
     }
     #[test]
-    fn unary_minus_parses() { let _ = parse_expr("-2 ^ 2"); }
+    fn unary_minus_looser_than_pow() {
+        match parse_expr("-2 ^ 2") {
+            Expr::Unary { op: crate::ast::UnOp::Neg, rhs, .. } =>
+                assert!(matches!(*rhs, Expr::Binary { op: BinOp::Pow, .. })),
+            other => panic!("ожидался Neg(Pow(..)), получено {other:?}"),
+        }
+    }
     #[test]
     fn assignment_parses() {
         match parse_expr("x = 5") {
@@ -271,5 +306,22 @@ mod tests {
         assert!(matches!(stmts[0], crate::ast::Stmt::FnDef { .. }));
         assert!(matches!(stmts[1], crate::ast::Stmt::While { .. }));
         assert!(matches!(stmts[2], crate::ast::Stmt::Repeat { .. }));
+    }
+    #[test]
+    fn deep_nesting_errors_not_crashes() {
+        let src = format!("{}1{}", "(".repeat(5000), ")".repeat(5000));
+        let toks = crate::lexer::tokenize(&src).unwrap();
+        assert!(Parser::new(toks).parse_single_expr().is_err());
+    }
+    #[test]
+    fn parse_errors_return_err_not_panic() {
+        fn parses_err(src: &str) -> bool {
+            let toks = crate::lexer::tokenize(src).unwrap();
+            Parser::new(toks).parse_single_expr().is_err()
+        }
+        assert!(parses_err("1 +"));        // dangling operator
+        assert!(parses_err("Max(1, 2"));   // missing RParen
+        assert!(parses_err("(1"));          // unclosed paren
+        assert!(parses_err("* 3"));         // leading binary op
     }
 }
