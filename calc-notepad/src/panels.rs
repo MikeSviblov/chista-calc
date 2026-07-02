@@ -28,7 +28,7 @@ pub fn side_panel(ctx: &egui::Context, doc: &Document, builtins: &[String]) -> O
 pub struct ToolbarActions { pub open: bool, pub save: bool, pub font_delta: f32, pub toggle_on_top: bool }
 
 /// Верхняя панель: открыть/сохранить файл, изменить размер шрифта, переключить "поверх окон".
-pub fn toolbar(ctx: &egui::Context, always_on_top: bool) -> ToolbarActions {
+pub fn toolbar(ctx: &egui::Context, always_on_top: bool, status: Option<&str>) -> ToolbarActions {
     let mut a = ToolbarActions { open: false, save: false, font_delta: 0.0, toggle_on_top: false };
     egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
         ui.horizontal(|ui| {
@@ -40,6 +40,7 @@ pub fn toolbar(ctx: &egui::Context, always_on_top: bool) -> ToolbarActions {
             ui.separator();
             let mut on_top = always_on_top;
             if ui.checkbox(&mut on_top, "поверх окон").changed() { a.toggle_on_top = true; }
+            if let Some(s) = status { ui.separator(); ui.weak(s); }
         });
     });
     a

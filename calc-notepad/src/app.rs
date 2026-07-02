@@ -7,6 +7,7 @@ pub struct NotepadApp {
     font_size: f32,
     always_on_top: bool,
     first_frame: bool,
+    status: Option<String>,
 }
 
 impl NotepadApp {
@@ -23,6 +24,7 @@ impl NotepadApp {
             font_size: st.font_size,
             always_on_top: st.always_on_top,
             first_frame: true,
+            status: None,
         }
     }
 
@@ -44,7 +46,7 @@ impl eframe::App for NotepadApp {
             }
         }
 
-        let acts = crate::panels::toolbar(ctx, self.always_on_top);
+        let acts = crate::panels::toolbar(ctx, self.always_on_top, self.status.as_deref());
         if acts.font_delta != 0.0 {
             self.font_size = (self.font_size + acts.font_delta).clamp(8.0, 40.0);
             self.persist();
@@ -58,16 +60,23 @@ impl eframe::App for NotepadApp {
         }
         if acts.open {
             if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc", "txt"]).pick_file() {
-                if let Ok(s) = std::fs::read_to_string(&path) {
-                    self.text = s;
-                    self.doc = Document::evaluate(&self.text);
-                    self.persist();
+                match std::fs::read_to_string(&path) {
+                    Ok(s) => {
+                        self.text = s;
+                        self.doc = Document::evaluate(&self.text);
+                        self.persist();
+                        self.status = Some(format!("Открыто: {}", path.display()));
+                    }
+                    Err(e) => { self.status = Some(format!("Ошибка открытия: {e}")); }
                 }
             }
         }
         if acts.save {
             if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc"]).save_file() {
-                let _ = std::fs::write(&path, &self.text);
+                self.status = Some(match std::fs::write(&path, &self.text) {
+                    Ok(()) => format!("Сохранено: {}", path.display()),
+                    Err(e) => format!("Ошибка сохранения: {e}"),
+                });
             }
         }
 
