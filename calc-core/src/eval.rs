@@ -73,7 +73,8 @@ fn apply_binop(op: BinOp, l: Value, r: Value, pos: usize) -> Result<Value> {
                 match op {
                     Add => Ok(Value::Float(a + b)), Sub => Ok(Value::Float(a - b)), Mul => Ok(Value::Float(a * b)),
                     Div => { if b == 0.0 { return Err(CalcError::DivisionByZero { pos }); } Ok(Value::Float(a / b)) }
-                    Rem => Ok(Value::Float(a % b)), Pow => Ok(Value::Float(a.powf(b))),
+                    Rem => { if b == 0.0 { return Err(CalcError::DivisionByZero { pos }); } Ok(Value::Float(a % b)) }
+                    Pow => Ok(Value::Float(a.powf(b))),
                     _ => unreachable!(),
                 }
             }
@@ -121,6 +122,13 @@ mod tests {
     #[test]
     fn division_by_zero_errors() {
         let toks = crate::lexer::tokenize("1/0").unwrap();
+        let expr = crate::parser::Parser::new(toks).parse_single_expr().unwrap();
+        let mut ev = Evaluator::new();
+        assert!(matches!(ev.eval_expr(&expr), Err(crate::error::CalcError::DivisionByZero { .. })));
+    }
+    #[test]
+    fn float_rem_by_zero_errors() {
+        let toks = crate::lexer::tokenize("1.5 % 0").unwrap();
         let expr = crate::parser::Parser::new(toks).parse_single_expr().unwrap();
         let mut ev = Evaluator::new();
         assert!(matches!(ev.eval_expr(&expr), Err(crate::error::CalcError::DivisionByZero { .. })));
