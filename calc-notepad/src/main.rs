@@ -1,7 +1,7 @@
 mod app;
-#[allow(dead_code)]
 mod document;
 mod editor;
+mod panels;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
