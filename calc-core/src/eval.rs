@@ -3,12 +3,23 @@ use crate::env::Env;
 use crate::error::{CalcError, Result};
 use crate::registry::Registry;
 use crate::value::Value;
-pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64 }
+pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64 }
 impl Evaluator {
-    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512 } }
+    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512, expr_depth: 0, expr_limit: 150 } }
     pub fn set_loop_limit(&mut self, n: u64) { self.loop_limit = n; }
     pub fn set_call_limit(&mut self, n: u64) { self.call_limit = n; }
+    pub fn set_expr_limit(&mut self, n: u64) { self.expr_limit = n; }
     pub fn eval_expr(&mut self, e: &Expr) -> Result<Value> {
+        self.expr_depth += 1;
+        if self.expr_depth > self.expr_limit {
+            self.expr_depth -= 1;
+            return Err(CalcError::ExprTooDeep { limit: self.expr_limit });
+        }
+        let out = self.eval_expr_inner(e);
+        self.expr_depth -= 1;
+        out
+    }
+    fn eval_expr_inner(&mut self, e: &Expr) -> Result<Value> {
         match e {
             Expr::Int(i, _) => Ok(Value::Int(*i)),
             Expr::Float(f, _) => Ok(Value::Float(*f)),
@@ -42,7 +53,12 @@ impl Evaluator {
                     }
                     self.env.push_scope();
                     for (p, v) in uf.params.iter().zip(vals) { self.env.set_var(p, v); }
+                    // Тело функции — новое выражение: глубина вложенности считается заново,
+                    // а рекурсию ограничивает call_depth. Native-стек в целом защищён обоими лимитами.
+                    let saved_expr = self.expr_depth;
+                    self.expr_depth = 0;
                     let out = self.eval_expr(&uf.body);
+                    self.expr_depth = saved_expr;
                     self.env.pop_scope();
                     self.call_depth -= 1;
                     out
@@ -275,4 +291,16 @@ mod tests {
     fn print_returns_first_arg() { assert_eq!(run("print(5)"), Value::Int(5)); }
     #[test]
     fn newline_separates_statements() { assert_eq!(run("x = 1\nx + 1"), Value::Int(2)); }
+    #[test]
+    fn deep_flat_expression_errors_not_aborts() {
+        let src = format!("{}1", "1+".repeat(5000));
+        let toks = crate::lexer::tokenize(&src).unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new();
+        assert!(matches!(ev.run(&stmts), Err(crate::error::CalcError::ExprTooDeep { .. })));
+    }
+    #[test]
+    fn moderate_deep_expression_still_evaluates() {
+        assert_eq!(run(&format!("{}1", "1+".repeat(100))), Value::Int(101));
+    }
 }

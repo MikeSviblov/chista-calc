@@ -23,6 +23,8 @@ pub enum CalcError {
     LoopLimitExceeded { limit: u64 },
     #[error("Превышена глубина вызовов функций ({limit})")]
     CallDepthExceeded { limit: u64 },
+    #[error("Слишком глубокое выражение (предел {limit})")]
+    ExprTooDeep { limit: u64 },
 }
 pub type Result<T> = std::result::Result<T, CalcError>;
 

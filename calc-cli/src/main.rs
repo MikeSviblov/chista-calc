@@ -5,6 +5,7 @@ use std::path::PathBuf;
 #[command(name = "calc", version, about = "Калькулятор — выражения, переменные, функции, циклы, хеши, шифры")]
 struct Args {
     /// Выражение для однократного вычисления
+    #[arg(conflicts_with = "file")]
     expr: Option<String>,
     /// Выполнить скрипт из файла
     #[arg(long)]
