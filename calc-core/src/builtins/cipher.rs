@@ -98,6 +98,26 @@ mod tests {
         assert_eq!(dec, s("The quick brown fox"));
     }
     #[test]
+    fn aes192_roundtrip() {
+        let key = s("000102030405060708090a0b0c0d0e0f1011121314151617"); // 24 bytes
+        let enc = call("Encrypt", &[s("aes"), key.clone(), s("secret message here")]);
+        let dec = call("Decrypt", &[s("aes"), key, enc]);
+        assert_eq!(dec, s("secret message here"));
+    }
+    #[test]
+    fn roundtrip_boundary_lengths() {
+        let key = s("000102030405060708090a0b0c0d0e0f");
+        for pt in ["", "0123456789abcdef", "0123456789abcdefg", "многобайтовый юникод 😀"] {
+            let enc = call("Encrypt", &[s("aes"), key.clone(), s(pt)]);
+            let dec = call("Decrypt", &[s("aes"), key.clone(), enc]);
+            assert_eq!(dec, s(pt), "round-trip failed for {pt:?}");
+        }
+        // empty plaintext still produces exactly one 16-byte padding block (32 hex)
+        if let Value::Str(h) = call("Encrypt", &[s("aes"), key, s("")]) {
+            assert_eq!(h.len(), 32);
+        } else { panic!() }
+    }
+    #[test]
     fn rijndael_alias_same_as_aes() {
         let key = s("000102030405060708090a0b0c0d0e0f");
         let enc_aes = call("Encrypt", &[s("aes"), key.clone(), s("data")]);
