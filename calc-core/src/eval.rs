@@ -3,12 +3,23 @@ use crate::env::Env;
 use crate::error::{CalcError, Result};
 use crate::registry::Registry;
 use crate::value::Value;
-pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64 }
+pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64, output: String }
 impl Evaluator {
-    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512, expr_depth: 0, expr_limit: 150 } }
+    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512, expr_depth: 0, expr_limit: 150, output: String::new() } }
     pub fn set_loop_limit(&mut self, n: u64) { self.loop_limit = n; }
     pub fn set_call_limit(&mut self, n: u64) { self.call_limit = n; }
     pub fn set_expr_limit(&mut self, n: u64) { self.expr_limit = n; }
+    pub fn take_output(&mut self) -> String { std::mem::take(&mut self.output) }
+    #[inline(never)]
+    fn capture_print(&mut self, vals: &[Value], pos: usize) -> Result<Value> {
+        if vals.is_empty() {
+            return Err(CalcError::WrongParams { func: "print".into(), expected: "≥1".into(), got: 0, pos });
+        }
+        let line = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
+        self.output.push_str(&line);
+        self.output.push('\n');
+        Ok(vals[0].clone())
+    }
     pub fn eval_expr(&mut self, e: &Expr) -> Result<Value> {
         self.expr_depth += 1;
         if self.expr_depth > self.expr_limit {
@@ -42,6 +53,9 @@ impl Evaluator {
             Expr::Call { name, args, pos } => {
                 let real = self.env.aliases.get(name).cloned().unwrap_or_else(|| name.clone());
                 let vals: Vec<Value> = args.iter().map(|a| self.eval_expr(a)).collect::<Result<_>>()?;
+                if real == "print" {
+                    return self.capture_print(&vals, *pos);
+                }
                 if let Some(uf) = self.env.funcs.get(&real).cloned() {
                     if uf.params.len() != vals.len() {
                         return Err(CalcError::WrongParams { func: real, expected: uf.params.len().to_string(), got: vals.len(), pos: *pos });
@@ -302,5 +316,24 @@ mod tests {
     #[test]
     fn moderate_deep_expression_still_evaluates() {
         assert_eq!(run(&format!("{}1", "1+".repeat(100))), Value::Int(101));
+    }
+    #[test]
+    fn print_is_captured_not_stdout() {
+        let toks = crate::lexer::tokenize("print(2+2); print(\"hi\")").unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new();
+        ev.run(&stmts).unwrap();
+        assert_eq!(ev.take_output(), "4\nhi\n");
+        assert_eq!(ev.take_output(), "");
+    }
+    #[test]
+    fn print_still_returns_first_arg() { assert_eq!(run("print(5)"), Value::Int(5)); }
+    #[test]
+    fn print_alias_captured() {
+        let toks = crate::lexer::tokenize("alias p = print; p(7)").unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new();
+        ev.run(&stmts).unwrap();
+        assert_eq!(ev.take_output(), "7\n");
     }
 }

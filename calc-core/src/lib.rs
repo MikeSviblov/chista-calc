@@ -27,7 +27,12 @@ impl Session {
     pub fn eval(&mut self, src: &str) -> error::Result<Value> {
         let toks = lexer::tokenize(src)?;
         let stmts = parser::Parser::new(toks).parse_program()?;
-        self.ev.run(&stmts)
+        let v = self.ev.run(&stmts)?;
+        let out = self.ev.take_output();
+        if !out.is_empty() {
+            print!("{out}");
+        }
+        Ok(v)
     }
 
     /// Доступ к вычислителю (для будущих фронтендов).
