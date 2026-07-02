@@ -175,14 +175,15 @@ fn lex_number(chars: &[char], start: usize) -> crate::error::Result<(TokenKind, 
                 j += 1;
             }
             let digits: String = chars[start + 2..j].iter().collect();
-            let literal: String = chars[start..j].iter().collect();
-            let value = i128::from_str_radix(&digits, radix).map_err(|_| {
-                CalcError::SyntaxError {
-                    msg: format!("Некорректное число '{literal}'"),
-                    pos: start,
-                }
-            })?;
-            return Ok((TokenKind::Int(value), j));
+            // For the error message, capture the whole offending run (e.g. "0xZZ"),
+            // not just the valid-digit prefix that `j` stops at.
+            let mut end = j;
+            while end < chars.len() && chars[end].is_alphanumeric() {
+                end += 1;
+            }
+            let literal: String = chars[start..end].iter().collect();
+            let kind = parse_int(&digits, radix, &literal, start)?;
+            return Ok((kind, j));
         }
     }
 
@@ -224,12 +225,24 @@ fn lex_number(chars: &[char], start: usize) -> crate::error::Result<(TokenKind, 
         })?;
         Ok((TokenKind::Float(value), j))
     } else {
-        let value = text.parse::<i128>().map_err(|_| CalcError::SyntaxError {
-            msg: "Число слишком большое".into(),
-            pos: start,
-        })?;
-        Ok((TokenKind::Int(value), j))
+        let kind = parse_int(&text, 10, &text, start)?;
+        Ok((kind, j))
     }
+}
+
+fn parse_int(digits: &str, radix: u32, display: &str, start: usize) -> crate::error::Result<TokenKind> {
+    i128::from_str_radix(digits, radix)
+        .map(TokenKind::Int)
+        .map_err(|e| {
+            let msg = if *e.kind() == std::num::IntErrorKind::PosOverflow
+                || *e.kind() == std::num::IntErrorKind::NegOverflow
+            {
+                "Число слишком большое".to_string()
+            } else {
+                format!("Некорректное число '{display}'")
+            };
+            CalcError::SyntaxError { msg, pos: start }
+        })
 }
 
 fn lex_string(chars: &[char], start: usize) -> crate::error::Result<(String, usize)> {
@@ -316,5 +329,25 @@ mod tests {
         assert!(tokenize("0x").is_err());
         assert!(tokenize("0o8").is_err());
         assert!(tokenize("99999999999999999999999999999999999999999999").is_err());
+    }
+    #[test]
+    fn malformed_number_message_shows_full_literal() {
+        let e = tokenize("0xZZ").unwrap_err();
+        assert_eq!(
+            e,
+            crate::error::CalcError::SyntaxError {
+                msg: "Некорректное число '0xZZ'".into(),
+                pos: 0,
+            }
+        );
+    }
+    #[test]
+    fn unterminated_string_errors() {
+        assert!(tokenize("\"abc").is_err());
+    }
+    #[test]
+    fn unknown_char_errors() {
+        let e = tokenize("$").unwrap_err();
+        assert!(matches!(e, crate::error::CalcError::SyntaxError { .. }));
     }
 }
