@@ -30,6 +30,16 @@ fn run_script_file() {
         .arg(&f)
         .assert()
         .success()
-        .stdout(contains("42"));
+        .stdout("42\n");
     let _ = std::fs::remove_file(&f);
+}
+
+#[test]
+fn one_shot_echoes_value() {
+    Command::cargo_bin("calc")
+        .unwrap()
+        .arg("IntToRoman(2024)")
+        .assert()
+        .success()
+        .stdout("MMXXIV\n");
 }

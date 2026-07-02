@@ -17,8 +17,9 @@ fn main() {
     let mut sess = calc_core::Session::new();
     if let Some(path) = args.file {
         match std::fs::read_to_string(&path) {
+            // Вывод скрипта — только из явных print(...); финальное значение не эхоим.
             Ok(src) => match sess.eval(&src) {
-                Ok(v) => println!("{v}"),
+                Ok(_) => {}
                 Err(e) => {
                     eprintln!("{e}");
                     std::process::exit(1);
