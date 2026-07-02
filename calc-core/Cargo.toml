@@ -15,6 +15,9 @@ tiger = "0.2"
 crc32fast = "1"
 adler = "1"
 hex = "0.4"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+cipher = { version = "0.4", features = ["block-padding", "alloc"] }
 
 [dev-dependencies]
 proptest = "1"
