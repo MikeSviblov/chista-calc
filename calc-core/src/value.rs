@@ -8,7 +8,9 @@ impl Value {
     pub fn as_int(&self, pos: Pos) -> Result<i128> {
         match self {
             Value::Int(i) => Ok(*i),
-            Value::Float(f) if f.fract() == 0.0 => Ok(*f as i128),
+            Value::Float(f) if f.fract() == 0.0
+                && *f >= i128::MIN as f64 && *f <= i128::MAX as f64 =>
+                Ok(*f as i128),
             _ => Err(CalcError::RangeError { msg: "ожидалось целое число".into(), pos }),
         }
     }
@@ -67,5 +69,25 @@ mod tests {
     fn as_float_promotes_int() {
         assert_eq!(Value::Int(3).as_float(0).unwrap(), 3.0);
         assert_eq!(Value::Float(3.5).as_float(0).unwrap(), 3.5);
+    }
+    #[test]
+    fn as_int_rejects_out_of_range_float() {
+        assert!(Value::Float(1e40).as_int(0).is_err());
+        assert!(Value::Float(-1e40).as_int(0).is_err());
+    }
+    #[test]
+    fn truthy_semantics() {
+        assert!(Value::Bool(true).truthy());
+        assert!(!Value::Bool(false).truthy());
+        assert!(!Value::Int(0).truthy());
+        assert!(Value::Int(3).truthy());
+        assert!(!Value::Float(0.0).truthy());
+        assert!(Value::Str("x".into()).truthy());
+        assert!(!Value::Str("".into()).truthy());
+    }
+    #[test]
+    fn as_str_ok_and_err() {
+        assert_eq!(Value::Str("hi".into()).as_str(0).unwrap(), "hi");
+        assert!(Value::Int(1).as_str(0).is_err());
     }
 }
