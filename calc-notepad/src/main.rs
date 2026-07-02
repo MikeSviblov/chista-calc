@@ -2,6 +2,7 @@
 mod app;
 mod document;
 mod highlight;
+mod notebook;
 mod panels;
 mod settings;
 mod transcript;
