@@ -64,6 +64,7 @@ pub fn register(r: &mut Registry) {
         let sub = a[0].as_str(pos)?;
         let s = a[1].as_str(pos)?;
         if sub.is_empty() {
+            // Пустая подстрока → 0 (как Delphi Pos('', s))
             return Ok(Value::Int(0));
         }
         match s.find(sub) {
@@ -157,5 +158,15 @@ mod tests {
         assert_eq!(call("Copy", &[s("abc"), Value::Int(2), Value::Int(100)]), s("bc")); // len clamps
         assert_eq!(call("Copy", &[s("abc"), Value::Int(10), Value::Int(3)]), s(""));    // start past end → empty
         assert!(err("Copy", &[s("abc"), Value::Int(0), Value::Int(1)]));                // start < 1 invalid
+    }
+    #[test]
+    fn pos_and_concat_edges() {
+        // Pos is char-indexed, not byte-indexed (multibyte)
+        assert_eq!(call("Pos", &[s("в"), s("абвгд")]), Value::Int(3));
+        assert_eq!(call("Pos", &[s("😀"), s("a😀b")]), Value::Int(2));
+        assert_eq!(call("Pos", &[s(""), s("abc")]), Value::Int(0)); // empty needle
+        // Concat error paths
+        assert!(err("Concat", &[])); // zero args
+        assert!(err("Concat", &[s("a"), Value::Int(5)])); // non-string arg
     }
 }
