@@ -7,7 +7,7 @@ pub fn register_all(r: &mut Registry) {
         match &a[0] {
             Value::Int(i) => i.checked_abs().map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }),
             Value::Float(f) => Ok(Value::Float(f.abs())),
-            _ => Err(CalcError::WrongParams { func: "Abs".into(), expected: "число".into(), got: a.len(), pos }),
+            _ => Err(CalcError::RangeError { msg: "ожидалось число".into(), pos }),
         }
     });
 }

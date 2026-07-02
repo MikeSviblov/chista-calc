@@ -19,7 +19,7 @@ impl Evaluator {
                 let v = self.eval_expr(rhs)?;
                 match op {
                     UnOp::Neg => match v {
-                        Value::Int(i) => i.checked_neg().map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos: *pos }),
+                        Value::Int(i) => checked_int(i.checked_neg(), *pos),
                         Value::Float(f) => Ok(Value::Float(-f)),
                         _ => Err(CalcError::RangeError { msg: "унарный минус к не-числу".into(), pos: *pos }),
                     },
@@ -49,6 +49,9 @@ impl Evaluator {
     }
 }
 impl Default for Evaluator { fn default() -> Self { Self::new() } }
+fn checked_int(v: Option<i128>, pos: usize) -> Result<Value> {
+    v.map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })
+}
 fn apply_binop(op: BinOp, l: Value, r: Value, pos: usize) -> Result<Value> {
     use BinOp::*;
     let both_int = matches!((&l, &r), (Value::Int(_), Value::Int(_)));
@@ -57,15 +60,21 @@ fn apply_binop(op: BinOp, l: Value, r: Value, pos: usize) -> Result<Value> {
             if both_int {
                 let (a, b) = (l.as_int(pos)?, r.as_int(pos)?);
                 match op {
-                    Add => a.checked_add(b).map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }),
-                    Sub => a.checked_sub(b).map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }),
-                    Mul => a.checked_mul(b).map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }),
-                    Rem => { if b == 0 { return Err(CalcError::DivisionByZero { pos }); } Ok(Value::Int(a % b)) }
-                    Div => {
-                        if b == 0 { return Err(CalcError::DivisionByZero { pos }); }
-                        if a % b == 0 { Ok(Value::Int(a / b)) } else { Ok(Value::Float(a as f64 / b as f64)) }
-                    }
-                    Pow => { if b < 0 { Ok(Value::Float((a as f64).powf(b as f64))) } else if b > u32::MAX as i128 { Err(CalcError::RangeError { msg: "слишком большая степень".into(), pos }) } else { a.checked_pow(b as u32).map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }) } }
+                    Add => checked_int(a.checked_add(b), pos),
+                    Sub => checked_int(a.checked_sub(b), pos),
+                    Mul => checked_int(a.checked_mul(b), pos),
+                    Rem => match a.checked_rem(b) {
+                        Some(v) => Ok(Value::Int(v)),
+                        None if b == 0 => Err(CalcError::DivisionByZero { pos }),
+                        None => Err(CalcError::RangeError { msg: "переполнение".into(), pos }),
+                    },
+                    Div => match a.checked_rem(b) {
+                        None if b == 0 => Err(CalcError::DivisionByZero { pos }),
+                        None => Err(CalcError::RangeError { msg: "переполнение".into(), pos }),
+                        Some(0) => checked_int(a.checked_div(b), pos),
+                        Some(_) => Ok(Value::Float(a as f64 / b as f64)),
+                    },
+                    Pow => { if b < 0 { Ok(Value::Float((a as f64).powf(b as f64))) } else if b > u32::MAX as i128 { Err(CalcError::RangeError { msg: "слишком большая степень".into(), pos }) } else { checked_int(a.checked_pow(b as u32), pos) } }
                     _ => unreachable!(),
                 }
             } else {
@@ -82,6 +91,10 @@ fn apply_binop(op: BinOp, l: Value, r: Value, pos: usize) -> Result<Value> {
         Eq | Ne | Lt | Le | Gt | Ge => {
             let res = match (&l, &r) {
                 (Value::Str(x), Value::Str(y)) => match op { Eq => x==y, Ne => x!=y, Lt => x<y, Le => x<=y, Gt => x>y, Ge => x>=y, _ => unreachable!() },
+                (Value::Bool(x), Value::Bool(y)) => {
+                    let (a, b) = (*x as i32, *y as i32);
+                    match op { Eq => a==b, Ne => a!=b, Lt => a<b, Le => a<=b, Gt => a>b, Ge => a>=b, _ => unreachable!() }
+                }
                 _ => { let (a, b) = (l.as_float(pos)?, r.as_float(pos)?); match op { Eq => a==b, Ne => a!=b, Lt => a<b, Le => a<=b, Gt => a>b, Ge => a>=b, _ => unreachable!() } }
             };
             Ok(Value::Bool(res))
@@ -132,5 +145,22 @@ mod tests {
         let expr = crate::parser::Parser::new(toks).parse_single_expr().unwrap();
         let mut ev = Evaluator::new();
         assert!(matches!(ev.eval_expr(&expr), Err(crate::error::CalcError::DivisionByZero { .. })));
+    }
+    fn eval_res(src: &str) -> Result<Value> {
+        let toks = crate::lexer::tokenize(src).unwrap();
+        let expr = crate::parser::Parser::new(toks).parse_single_expr().unwrap();
+        let mut ev = Evaluator::new();
+        ev.eval_expr(&expr)
+    }
+    #[test]
+    fn int_min_div_rem_no_panic() {
+        assert!(eval_res("(-170141183460469231731687303715884105727 - 1) % -1").is_err());
+        assert!(eval_res("(-170141183460469231731687303715884105727 - 1) / -1").is_err());
+    }
+    #[test]
+    fn bool_comparisons() {
+        assert_eq!(eval_str("true == true"), Value::Bool(true));
+        assert_eq!(eval_str("false < true"), Value::Bool(true));
+        assert_eq!(eval_str("true != false"), Value::Bool(true));
     }
 }
