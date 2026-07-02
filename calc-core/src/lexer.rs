@@ -72,7 +72,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
         }
 
         if c.is_ascii_digit() {
-            let (kind, next) = lex_number(&chars, i);
+            let (kind, next) = lex_number(&chars, i)?;
             tokens.push(Token { kind, pos: start });
             i = next;
             continue;
@@ -160,7 +160,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
     Ok(tokens)
 }
 
-fn lex_number(chars: &[char], start: usize) -> (TokenKind, usize) {
+fn lex_number(chars: &[char], start: usize) -> crate::error::Result<(TokenKind, usize)> {
     if chars[start] == '0' && start + 1 < chars.len() {
         let base_char = chars[start + 1];
         let (radix, is_base_prefix) = match base_char {
@@ -175,8 +175,14 @@ fn lex_number(chars: &[char], start: usize) -> (TokenKind, usize) {
                 j += 1;
             }
             let digits: String = chars[start + 2..j].iter().collect();
-            let value = i128::from_str_radix(&digits, radix).unwrap();
-            return (TokenKind::Int(value), j);
+            let literal: String = chars[start..j].iter().collect();
+            let value = i128::from_str_radix(&digits, radix).map_err(|_| {
+                CalcError::SyntaxError {
+                    msg: format!("Некорректное число '{literal}'"),
+                    pos: start,
+                }
+            })?;
+            return Ok((TokenKind::Int(value), j));
         }
     }
 
@@ -212,9 +218,17 @@ fn lex_number(chars: &[char], start: usize) -> (TokenKind, usize) {
 
     let text: String = chars[start..j].iter().collect();
     if is_float {
-        (TokenKind::Float(text.parse::<f64>().unwrap()), j)
+        let value = text.parse::<f64>().map_err(|_| CalcError::SyntaxError {
+            msg: format!("Некорректное число '{text}'"),
+            pos: start,
+        })?;
+        Ok((TokenKind::Float(value), j))
     } else {
-        (TokenKind::Int(text.parse::<i128>().unwrap()), j)
+        let value = text.parse::<i128>().map_err(|_| CalcError::SyntaxError {
+            msg: "Число слишком большое".into(),
+            pos: start,
+        })?;
+        Ok((TokenKind::Int(value), j))
     }
 }
 
@@ -295,5 +309,12 @@ mod tests {
     #[test]
     fn newline_is_emitted() {
         assert_eq!(kinds("1\n2"), vec![TokenKind::Int(1), TokenKind::Newline, TokenKind::Int(2), TokenKind::Eof]);
+    }
+    #[test]
+    fn malformed_and_overflow_numbers_error_not_panic() {
+        assert!(tokenize("0xZZ").is_err());
+        assert!(tokenize("0x").is_err());
+        assert!(tokenize("0o8").is_err());
+        assert!(tokenize("99999999999999999999999999999999999999999999").is_err());
     }
 }
