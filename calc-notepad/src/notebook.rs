@@ -79,7 +79,7 @@ mod tests {
     #[test]
     fn from_text_computes_results_per_line() {
         let nb = Notebook::from_text("цена = 1990\nцена * 12\nIntToRoman(2024)");
-        assert_eq!(nb.results[0], Some(("1990".into(), false)));
+        assert_eq!(nb.results[0], None); // присваивание — молчит
         assert_eq!(nb.results[1], Some(("23880".into(), false)));
         assert_eq!(nb.results[2], Some(("MMXXIV".into(), false)));
     }
