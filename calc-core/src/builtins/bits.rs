@@ -1,18 +1,11 @@
 use super::arity;
-use crate::error::{CalcError, Result};
+use crate::error::{CalcError, Pos, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 
-fn check_shift(n: i128, pos: usize) -> Result<u32> {
+fn check_bounded(n: i128, pos: Pos, what: &str) -> Result<u32> {
     if !(0..=127).contains(&n) {
-        return Err(CalcError::RangeError { msg: "сдвиг должен быть в диапазоне 0..=127".into(), pos });
-    }
-    Ok(n as u32)
-}
-
-fn check_bit_index(n: i128, pos: usize) -> Result<u32> {
-    if !(0..=127).contains(&n) {
-        return Err(CalcError::RangeError { msg: "индекс бита должен быть в диапазоне 0..=127".into(), pos });
+        return Err(CalcError::RangeError { msg: format!("{what} должен быть в диапазоне 0..=127"), pos });
     }
     Ok(n as u32)
 }
@@ -37,37 +30,37 @@ pub fn register(r: &mut Registry) {
     r.register("Shl", |a, pos| {
         arity(a, 2, "Shl", pos)?;
         let v = a[0].as_int(pos)?;
-        let s = check_shift(a[1].as_int(pos)?, pos)?;
+        let s = check_bounded(a[1].as_int(pos)?, pos, "сдвиг")?;
         Ok(Value::Int(v << s))
     });
     r.register("Shr", |a, pos| {
         arity(a, 2, "Shr", pos)?;
         let v = a[0].as_int(pos)?;
-        let s = check_shift(a[1].as_int(pos)?, pos)?;
+        let s = check_bounded(a[1].as_int(pos)?, pos, "сдвиг")?;
         Ok(Value::Int(v >> s))
     });
     r.register("BitTest", |a, pos| {
         arity(a, 2, "BitTest", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bit_index(a[1].as_int(pos)?, pos)?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
         Ok(Value::Bool((v >> n) & 1 == 1))
     });
     r.register("BitSet", |a, pos| {
         arity(a, 2, "BitSet", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bit_index(a[1].as_int(pos)?, pos)?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
         Ok(Value::Int(v | (1i128 << n)))
     });
     r.register("BitClear", |a, pos| {
         arity(a, 2, "BitClear", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bit_index(a[1].as_int(pos)?, pos)?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
         Ok(Value::Int(v & !(1i128 << n)))
     });
     r.register("BitToggle", |a, pos| {
         arity(a, 2, "BitToggle", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bit_index(a[1].as_int(pos)?, pos)?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
         Ok(Value::Int(v ^ (1i128 << n)))
     });
 }

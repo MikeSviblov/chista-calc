@@ -205,7 +205,7 @@ mod prop {
     fn call(name: &str, a: &[Value]) -> Value { Registry::with_builtins().get(name).unwrap()(a, 0).unwrap() }
     proptest! {
         #[test]
-        fn base_roundtrip_prop(n in 0i128..1_000_000, base in 2i128..=36) {
+        fn base_roundtrip_prop(n in -1_000_000_000_000i128..1_000_000_000_000, base in 2i128..=36) {
             let s = call("IntToBase", &[Value::Int(n), Value::Int(base)]);
             prop_assert_eq!(call("BaseToInt", &[s, Value::Int(base)]), Value::Int(n));
         }
