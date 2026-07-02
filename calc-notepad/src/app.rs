@@ -8,6 +8,8 @@ pub struct NotepadApp {
     always_on_top: bool,
     first_frame: bool,
     status: Option<String>,
+    dirty: bool,
+    last_edit: std::time::Instant,
 }
 
 impl NotepadApp {
@@ -25,6 +27,8 @@ impl NotepadApp {
             always_on_top: st.always_on_top,
             first_frame: true,
             status: None,
+            dirty: false,
+            last_edit: std::time::Instant::now(),
         }
     }
 
@@ -63,8 +67,8 @@ impl eframe::App for NotepadApp {
                 match std::fs::read_to_string(&path) {
                     Ok(s) => {
                         self.text = s;
-                        self.doc = Document::evaluate(&self.text);
-                        self.persist();
+                        self.dirty = true;
+                        self.last_edit = std::time::Instant::now();
                         self.status = Some(format!("Открыто: {}", path.display()));
                     }
                     Err(e) => { self.status = Some(format!("Ошибка открытия: {e}")); }
@@ -90,9 +94,20 @@ impl eframe::App for NotepadApp {
         crate::panels::output_panel(ctx, &self.doc.output);
         egui::CentralPanel::default().show(ctx, |ui| {
             if crate::editor::code_with_results(ui, &mut self.text, &self.doc, font_size) {
-                self.doc = Document::evaluate(&self.text);
-                self.persist();
+                self.dirty = true;
+                self.last_edit = std::time::Instant::now();
             }
         });
+
+        if self.dirty {
+            let due = std::time::Duration::from_millis(150);
+            if self.last_edit.elapsed() >= due {
+                self.doc = Document::evaluate(&self.text);
+                self.persist();
+                self.dirty = false;
+            } else {
+                ctx.request_repaint_after(due - self.last_edit.elapsed());
+            }
+        }
     }
 }
