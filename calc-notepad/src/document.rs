@@ -16,10 +16,13 @@ impl Document {
         let mut results = HashMap::new();
         let mut errors = HashSet::new();
         for l in &d.lines {
-            match &l.outcome {
-                DocLineOutcome::Value(v) => { results.insert(l.line, v.to_string()); }
-                DocLineOutcome::Error(e) => { results.insert(l.line, e.to_string()); errors.insert(l.line); }
-                DocLineOutcome::Defined => {}
+            let text = match &l.outcome {
+                DocLineOutcome::Value(v) => Some(v.to_string()),
+                DocLineOutcome::Error(e) => { errors.insert(l.line); Some(e.to_string()) }
+                DocLineOutcome::Defined => None,
+            };
+            if let Some(t) = text {
+                results.entry(l.line).and_modify(|acc: &mut String| { acc.push_str(", "); acc.push_str(&t); }).or_insert(t);
             }
         }
         let variables = s.variables().into_iter().map(|(k, v)| (k, v.to_string())).collect();
@@ -56,5 +59,10 @@ mod tests {
     fn defined_lines_have_no_result() {
         let doc = Document::evaluate("fn f(n) = n*n");
         assert_eq!(doc.result_for_line(1), None);
+    }
+    #[test]
+    fn multiple_statements_on_one_line_accumulate() {
+        let doc = Document::evaluate("x = 1; x + 1");
+        assert_eq!(doc.result_for_line(1).as_deref(), Some("1, 2"));
     }
 }
