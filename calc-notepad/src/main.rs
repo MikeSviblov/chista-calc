@@ -1,6 +1,7 @@
 mod app;
 mod document;
 mod editor;
+mod highlight;
 mod panels;
 mod settings;
 

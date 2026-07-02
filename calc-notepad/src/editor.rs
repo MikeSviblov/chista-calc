@@ -15,12 +15,18 @@ pub fn code_with_results(ui: &mut egui::Ui, text: &mut String, doc: &Document, f
     ui.horizontal_top(|ui| {
         let total = ui.available_width();
         let editor_w = total * 0.72;
+        let mut layouter = |ui: &egui::Ui, text: &str, wrap_width: f32| {
+            let mut job = crate::highlight::layout_job(text, font_size);
+            job.wrap.max_width = wrap_width;
+            ui.fonts(|f| f.layout_job(job))
+        };
         let resp = ui.add_sized(
             [editor_w, ui.available_height()],
             egui::TextEdit::multiline(text)
                 .font(egui::FontId::monospace(font_size))
                 .desired_width(editor_w)
-                .code_editor(),
+                .code_editor()
+                .layouter(&mut layouter),
         );
         changed = resp.changed();
         ui.vertical(|ui| {
