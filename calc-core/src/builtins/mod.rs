@@ -1,6 +1,7 @@
 pub mod bases;
 pub mod bits;
 pub mod math;
+pub mod strings;
 pub mod trig;
 use crate::error::{CalcError, Result};
 use crate::registry::Registry;
@@ -10,6 +11,7 @@ pub fn register_all(r: &mut Registry) {
     trig::register(r);
     bases::register(r);
     bits::register(r);
+    strings::register(r);
 }
 pub(crate) fn arity(args: &[Value], n: usize, func: &str, pos: usize) -> Result<()> {
     if args.len() != n {
