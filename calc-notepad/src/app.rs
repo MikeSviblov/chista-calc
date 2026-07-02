@@ -15,14 +15,9 @@ impl NotepadApp {
 
 impl eframe::App for NotepadApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let font_size = 14.0;
         egui::CentralPanel::default().show(ctx, |ui| {
-            let resp = ui.add(
-                egui::TextEdit::multiline(&mut self.text)
-                    .font(egui::TextStyle::Monospace)
-                    .desired_width(f32::INFINITY)
-                    .code_editor(),
-            );
-            if resp.changed() {
+            if crate::editor::code_with_results(ui, &mut self.text, &self.doc, font_size) {
                 self.doc = Document::evaluate(&self.text);
             }
         });
