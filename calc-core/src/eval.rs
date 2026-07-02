@@ -3,12 +3,27 @@ use crate::env::Env;
 use crate::error::{CalcError, Result};
 use crate::registry::Registry;
 use crate::value::Value;
-pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64 }
+pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64, output: String }
+#[derive(Debug)]
+pub enum StmtOutcome { Value(Value), Defined, Error(CalcError) }
 impl Evaluator {
-    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512, expr_depth: 0, expr_limit: 150 } }
+    pub fn new() -> Self { Evaluator { env: Env::new(), registry: Registry::with_builtins(), loop_limit: 1_000_000, call_depth: 0, call_limit: 512, expr_depth: 0, expr_limit: 150, output: String::new() } }
     pub fn set_loop_limit(&mut self, n: u64) { self.loop_limit = n; }
     pub fn set_call_limit(&mut self, n: u64) { self.call_limit = n; }
     pub fn set_expr_limit(&mut self, n: u64) { self.expr_limit = n; }
+    pub fn take_output(&mut self) -> String { std::mem::take(&mut self.output) }
+    // #[inline(never)]: inlining into the recursive eval_expr_inner grows its per-frame
+    // stack size and can trip the 512-deep recursion test on the 2 MB test-thread stack.
+    #[inline(never)]
+    fn capture_print(&mut self, vals: &[Value], pos: usize) -> Result<Value> {
+        if vals.is_empty() {
+            return Err(CalcError::WrongParams { func: "print".into(), expected: "≥1".into(), got: 0, pos });
+        }
+        let line = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
+        self.output.push_str(&line);
+        self.output.push('\n');
+        Ok(vals[0].clone())
+    }
     pub fn eval_expr(&mut self, e: &Expr) -> Result<Value> {
         self.expr_depth += 1;
         if self.expr_depth > self.expr_limit {
@@ -42,6 +57,8 @@ impl Evaluator {
             Expr::Call { name, args, pos } => {
                 let real = self.env.aliases.get(name).cloned().unwrap_or_else(|| name.clone());
                 let vals: Vec<Value> = args.iter().map(|a| self.eval_expr(a)).collect::<Result<_>>()?;
+                // Пользовательская функция имеет приоритет над встроенными, включая print:
+                // `fn print(n) = ...` должна затенять встроенный print, как любой другой builtin.
                 if let Some(uf) = self.env.funcs.get(&real).cloned() {
                     if uf.params.len() != vals.len() {
                         return Err(CalcError::WrongParams { func: real, expected: uf.params.len().to_string(), got: vals.len(), pos: *pos });
@@ -62,6 +79,8 @@ impl Evaluator {
                     self.env.pop_scope();
                     self.call_depth -= 1;
                     out
+                } else if real == "print" {
+                    self.capture_print(&vals, *pos)
                 } else if let Some(f) = self.registry.get(&real) {
                     f(&vals, *pos)
                 } else {
@@ -74,6 +93,18 @@ impl Evaluator {
         let mut last = Value::Bool(false);
         for s in stmts { last = self.eval_stmt(s)?; }
         Ok(last)
+    }
+    pub fn run_document(&mut self, stmts: &[Stmt]) -> Vec<(usize, StmtOutcome)> {
+        let mut out = Vec::with_capacity(stmts.len());
+        for s in stmts {
+            let pos = crate::ast::stmt_pos(s);
+            let outcome = match s {
+                Stmt::FnDef { .. } | Stmt::Alias { .. } => match self.eval_stmt(s) { Ok(_) => StmtOutcome::Defined, Err(e) => StmtOutcome::Error(e) },
+                _ => match self.eval_stmt(s) { Ok(v) => StmtOutcome::Value(v), Err(e) => StmtOutcome::Error(e) },
+            };
+            out.push((pos, outcome));
+        }
+        out
     }
     fn eval_stmt(&mut self, s: &Stmt) -> Result<Value> {
         match s {
@@ -302,5 +333,28 @@ mod tests {
     #[test]
     fn moderate_deep_expression_still_evaluates() {
         assert_eq!(run(&format!("{}1", "1+".repeat(100))), Value::Int(101));
+    }
+    #[test]
+    fn print_is_captured_not_stdout() {
+        let toks = crate::lexer::tokenize("print(2+2); print(\"hi\")").unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new();
+        ev.run(&stmts).unwrap();
+        assert_eq!(ev.take_output(), "4\nhi\n");
+        assert_eq!(ev.take_output(), "");
+    }
+    #[test]
+    fn print_still_returns_first_arg() { assert_eq!(run("print(5)"), Value::Int(5)); }
+    #[test]
+    fn print_alias_captured() {
+        let toks = crate::lexer::tokenize("alias p = print; p(7)").unwrap();
+        let stmts = crate::parser::Parser::new(toks).parse_program().unwrap();
+        let mut ev = Evaluator::new();
+        ev.run(&stmts).unwrap();
+        assert_eq!(ev.take_output(), "7\n");
+    }
+    #[test]
+    fn user_fn_can_shadow_print() {
+        assert_eq!(run("fn print(n) = n*2; print(5)"), Value::Int(10));
     }
 }

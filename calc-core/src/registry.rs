@@ -7,6 +7,7 @@ impl Registry {
     pub fn new() -> Self { Registry { map: HashMap::new() } }
     pub fn register(&mut self, name: &'static str, f: BuiltinFn) { self.map.insert(name, f); }
     pub fn get(&self, name: &str) -> Option<BuiltinFn> { self.map.get(name).copied() }
+    pub fn names(&self) -> Vec<&'static str> { self.map.keys().copied().collect() }
     pub fn with_builtins() -> Self { let mut r = Registry::new(); crate::builtins::register_all(&mut r); r }
 }
 impl Default for Registry { fn default() -> Self { Self::new() } }
@@ -23,6 +24,13 @@ mod tests {
     }
     #[test]
     fn unknown_returns_none() { assert!(Registry::with_builtins().get("Нету").is_none()); }
+    #[test]
+    fn names_contains_builtins() {
+        let r = Registry::with_builtins();
+        let names = r.names();
+        assert!(names.contains(&"Sqrt"));
+        assert!(names.contains(&"Sha256"));
+    }
     #[test]
     fn abs_i128_min_does_not_panic_and_errors() {
         let reg = Registry::with_builtins();

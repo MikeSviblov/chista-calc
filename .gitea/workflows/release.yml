@@ -17,7 +17,12 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           "$HOME/.cargo/bin/rustup" target add x86_64-pc-windows-gnu
           sudo apt-get update -qq
-          sudo apt-get install -y mingw-w64
+          # calc-notepad (eframe/egui + rfd) build deps for the Linux CI runner.
+          # ASSUMPTION: not validated in Gitea CI. egui/glutin/winit + rfd's GTK
+          # fallback typically need these dev headers/libs to BUILD on a fresh runner.
+          sudo apt-get install -y mingw-w64 \
+            libgtk-3-dev libxkbcommon-dev libgl1-mesa-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
       - name: Test (gate the release)
         run: cargo test --workspace --all-targets
@@ -28,11 +33,18 @@ jobs:
       - name: Build Windows (x86_64)
         run: cargo build --release --target x86_64-pc-windows-gnu -p calc-cli
 
+      - name: Build Linux notepad
+        run: cargo build --release -p calc-notepad
+      - name: Build Windows notepad
+        run: cargo build --release --target x86_64-pc-windows-gnu -p calc-notepad
+
       - name: Collect artifacts
         run: |
           mkdir -p dist
           cp target/release/calc dist/calc-linux-x64
           cp target/x86_64-pc-windows-gnu/release/calc.exe dist/calc.exe
+          cp target/release/calc-notepad dist/calc-notepad-linux-x64
+          cp target/x86_64-pc-windows-gnu/release/calc-notepad.exe dist/calc-notepad.exe
           ls -la dist
 
       - name: Publish artifacts to the tag's release
@@ -48,7 +60,7 @@ jobs:
             rid=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" "$API/repos/$REPO/releases" -d "{\"tag_name\":\"$TAG\",\"name\":\"$TAG\",\"prerelease\":true}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
           fi
           echo "release id: $rid"
-          for f in dist/calc.exe dist/calc-linux-x64; do
+          for f in dist/calc.exe dist/calc-linux-x64 dist/calc-notepad.exe dist/calc-notepad-linux-x64; do
             name=$(basename "$f")
             aid=$(curl -s -H "$AUTH" "$API/repos/$REPO/releases/$rid/assets" | NAME="$name" python3 -c "import sys,json,os; print(next((a['id'] for a in json.load(sys.stdin) if a.get('name')==os.environ['NAME']),''))" 2>/dev/null || echo "")
             if [ -n "$aid" ]; then curl -s -X DELETE -H "$AUTH" "$API/repos/$REPO/releases/$rid/assets/$aid" >/dev/null || true; fi

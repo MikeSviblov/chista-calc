@@ -42,6 +42,7 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub pos: usize,
+    pub end: usize,
 }
 
 pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
@@ -59,7 +60,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
         }
 
         if c == '\n' {
-            tokens.push(Token { kind: TokenKind::Newline, pos: start });
+            tokens.push(Token { kind: TokenKind::Newline, pos: start, end: start + 1 });
             i += 1;
             continue;
         }
@@ -73,14 +74,14 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
 
         if c.is_ascii_digit() {
             let (kind, next) = lex_number(&chars, i)?;
-            tokens.push(Token { kind, pos: start });
+            tokens.push(Token { kind, pos: start, end: next });
             i = next;
             continue;
         }
 
         if c == '"' {
             let (s, next) = lex_string(&chars, i)?;
-            tokens.push(Token { kind: TokenKind::Str(s), pos: start });
+            tokens.push(Token { kind: TokenKind::Str(s), pos: start, end: next });
             i = next;
             continue;
         }
@@ -100,7 +101,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
                 "false" => TokenKind::False,
                 _ => TokenKind::Ident(word),
             };
-            tokens.push(Token { kind, pos: start });
+            tokens.push(Token { kind, pos: start, end: j });
             i = j;
             continue;
         }
@@ -118,7 +119,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
                 _ => None,
             };
             if let Some(kind) = two_kind {
-                tokens.push(Token { kind, pos: start });
+                tokens.push(Token { kind, pos: start, end: start + 2 });
                 i += 2;
                 continue;
             }
@@ -145,7 +146,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
         };
 
         if let Some(kind) = single_kind {
-            tokens.push(Token { kind, pos: start });
+            tokens.push(Token { kind, pos: start, end: start + 1 });
             i += 1;
             continue;
         }
@@ -156,7 +157,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
         });
     }
 
-    tokens.push(Token { kind: TokenKind::Eof, pos: chars.len() });
+    tokens.push(Token { kind: TokenKind::Eof, pos: chars.len(), end: chars.len() });
     Ok(tokens)
 }
 
@@ -349,5 +350,13 @@ mod tests {
     fn unknown_char_errors() {
         let e = tokenize("$").unwrap_err();
         assert!(matches!(e, crate::error::CalcError::SyntaxError { .. }));
+    }
+    #[test]
+    fn tokens_carry_end_positions() {
+        let t = tokenize("0x1F + ab").unwrap();
+        // 0x1F: pos 0, end 4 ; + : pos 5, end 6 ; ab: pos 7, end 9 ; Eof pos 9
+        assert_eq!((t[0].pos, t[0].end), (0, 4));
+        assert_eq!((t[1].pos, t[1].end), (5, 6));
+        assert_eq!((t[2].pos, t[2].end), (7, 9));
     }
 }
