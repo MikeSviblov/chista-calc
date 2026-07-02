@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["calc-core", "calc-cli"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+
+[workspace.dependencies]
+thiserror = "1"
