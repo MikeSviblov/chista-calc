@@ -20,6 +20,14 @@ pub fn register_all(r: &mut Registry) {
     cipher::register(r);
     fileio::register(r);
     datetime::register(r);
+    r.register("print", |a, pos| {
+        if a.is_empty() {
+            return Err(CalcError::WrongParams { func: "print".into(), expected: "≥1".into(), got: 0, pos });
+        }
+        let line = a.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
+        println!("{line}");
+        Ok(a[0].clone())
+    });
 }
 pub(crate) fn arity(args: &[Value], n: usize, func: &str, pos: usize) -> Result<()> {
     if args.len() != n {

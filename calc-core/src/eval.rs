@@ -271,4 +271,8 @@ mod tests {
         assert!(matches!(run_res("fn f(n) = f(n); f(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
         assert!(matches!(run_res("fn a(n)=b(n); fn b(n)=a(n); a(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
     }
+    #[test]
+    fn print_returns_first_arg() { assert_eq!(run("print(5)"), Value::Int(5)); }
+    #[test]
+    fn newline_separates_statements() { assert_eq!(run("x = 1\nx + 1"), Value::Int(2)); }
 }
