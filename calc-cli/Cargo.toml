@@ -1,0 +1,11 @@
+[package]
+name = "calc-cli"
+edition.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "calc"
+path = "src/main.rs"
+
+[dependencies]
+calc-core = { path = "../calc-core" }
