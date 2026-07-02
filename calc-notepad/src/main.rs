@@ -2,6 +2,7 @@ mod app;
 mod document;
 mod editor;
 mod panels;
+mod settings;
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
