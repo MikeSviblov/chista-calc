@@ -1,53 +1,55 @@
 # calc
 
-Современный эквивалент «Чиста калькулятор 2.0», переписанный на Rust.
+[Русский](README.ru.md) · **English**
 
-Оригинал — desktop-приложение под Windows (Delphi, движок `TReckoner`, крипто-бэкенд
-DCPcrypt), исходники утеряны. Инвентарь функций и синтаксиса был восстановлён
-реверс-инжинирингом бинарника — см. `reverse/extracted-inventory.md` и дизайн-документ
-`docs/superpowers/specs/2026-07-02-modern-calc-design.md`. Это не клон 1:1, а
-современный эквивалент: свободный выбор синтаксиса/API, без обратной совместимости
-со старыми файлами-сценариями.
+A modern equivalent of "Chista Calculator 2.0" ("Чиста калькулятор 2.0"), rewritten in Rust.
 
-## Где работает
+The original was a Windows desktop app (Delphi, the `TReckoner` engine, DCPcrypt crypto
+backend); its sources are lost. The inventory of functions and syntax was recovered by
+reverse-engineering the binary — see `reverse/extracted-inventory.md` and the design doc
+`docs/superpowers/specs/2026-07-02-modern-calc-design.md`. This is not a 1:1 clone but a
+modern equivalent: syntax/API chosen freely, with no backward compatibility with the old
+script files.
 
-Два фронтенда поверх общего ядра:
+## Where it runs
 
-- **`calc`** — кроссплатформенный CLI, один бинарник (Linux/macOS/Windows — везде, где
-  собирается Rust).
-- **`calc-notepad`** — десктопный GUI-блокнот (egui/eframe), Linux и Windows.
+Two frontends over a shared core:
 
-Нет демонов, нет сети, нет внешних зависимостей во время работы.
+- **`calc`** — a cross-platform CLI, a single binary (Linux/macOS/Windows — anywhere Rust
+  builds).
+- **`calc-notepad`** — a desktop GUI notepad (egui/eframe), Linux and Windows.
 
-## Архитектура
+No daemons, no network, no runtime dependencies.
 
-Cargo workspace из трёх крейтов:
+## Architecture
 
-- **`calc-core`** — библиотека-ядро, без UI-ввода/вывода: `lexer` → `parser` → `ast` →
-  `eval`, плюс `env` (области видимости: переменные, пользовательские функции,
-  псевдонимы) и `registry`/`builtins` (встроенные функции). Ядро переиспользуемо для
-  будущих GUI/web-обёрток.
-- **`calc-cli`** — тонкий бинарник: REPL, запуск скрипт-файлов (`--file`), разовое
-  выражение из аргумента командной строки.
-- **`calc-notepad`** — GUI-блокнот (egui/eframe): живой inline-калькулятор поверх
-  того же ядра. Подробнее — раздел «GUI-блокнот».
+A Cargo workspace of three crates:
 
-## Сборка
+- **`calc-core`** — the engine library, with no UI I/O: `lexer` → `parser` → `ast` →
+  `eval`, plus `env` (scopes: variables, user functions, aliases) and
+  `registry`/`builtins` (built-in functions). The core is reusable for future GUI/web
+  wrappers.
+- **`calc-cli`** — a thin binary: REPL, running script files (`--file`), a one-off
+  expression from a command-line argument.
+- **`calc-notepad`** — the GUI notepad (egui/eframe): a live inline calculator over the
+  same core. See the "GUI notepad" section.
+
+## Building
 
 ```sh
 cargo build --release
 ```
 
-Бинарник появится в `target/release/calc`.
+The binary appears at `target/release/calc`.
 
-## Использование CLI (`calc`)
+## Using the CLI (`calc`)
 
-Всё ниже — про консольный бинарник `calc` (команды в терминале). Работа в
-GUI-блокноте описана отдельно, в разделе [«GUI-блокнот»](#gui-блокнот).
+Everything below is about the console binary `calc` (terminal commands). Working in the
+GUI notepad is described separately in the [GUI notepad](#gui-notepad) section.
 
-Четыре режима работы.
+Four modes of operation.
 
-### Разовое выражение
+### One-off expression
 
 ```sh
 calc "2 + 2 * 3"
@@ -66,15 +68,15 @@ calc 'Sha256("abc")'
 calc
 ```
 
-Запускается интерактивный режим (`> ` — приглашение). Выход — `Ctrl-D`.
+Starts the interactive mode (`> ` prompt). Exit with `Ctrl-D`.
 
-### Скрипт из файла
+### Script from a file
 
 ```sh
 calc --file script.calc
 ```
 
-Пример `script.calc`:
+Example `script.calc`:
 
 ```
 x = 6
@@ -88,159 +90,171 @@ while (i < x) {
 print(result)
 ```
 
-В режиме `--file` вывод даёт только явный `print(...)`; итоговое значение
-последней инструкции не печатается автоматически. Разовое выражение
-(`calc "expr"`) и REPL, наоборот, печатают вычисленное значение.
+In `--file` mode the only output comes from explicit `print(...)`; the value of the last
+statement is not printed automatically. A one-off expression (`calc "expr"`) and the
+REPL, by contrast, print the computed value.
 
-### Справка по функциям
+### Function help
 
 ```sh
-calc help            # список всех функций по категориям
-calc help Sqrt       # двуязычная статья по функции: сигнатура, RU/EN, пример
+calc help            # list all functions by category
+calc help Sqrt       # bilingual article for a function: signature, RU/EN, example
 ```
 
-Те же команды `help` и `help <имя>` работают и внутри REPL.
+The same `help` and `help <name>` commands work inside the REPL too.
 
-## GUI-блокнот
+### Message language
 
-`calc-notepad` — «блокнот, который считает»: десктопный фронтенд (egui/eframe) поверх
-того же ядра `calc-core`, повторяющий идею оригинала.
+Errors, `help` output, and the REPL prompt are available in Russian and English:
 
-### Запуск
+```sh
+calc --lang en "1/0"      # Division by zero (position 1)
+CALC_LANG=en calc help Sqrt
+```
+
+The default is Russian. Priority: the `--lang` flag > the `CALC_LANG` variable > Russian.
+
+## GUI notepad
+
+`calc-notepad` — "a notepad that computes": a desktop frontend (egui/eframe) over the same
+`calc-core`, echoing the idea of the original.
+
+### Launching
 
 ```sh
 calc-notepad
 ```
 
-### Как пользоваться
+### How to use it
 
-1. Запусти `calc-notepad` — откроется окно с несколькими строками-примерами.
-2. Набери выражение (например `2 + 2 * 3`) и нажми **Enter** — строкой ниже, зелёным,
-   появится результат.
-3. Заводи переменные и функции по ходу: `цена = 1990`, следующей строкой `цена * 12` —
-   присваивание молчит, выражение считается. Состояние видно всем строкам ниже.
-4. Забыл имя функции — начни печатать и нажми **Tab**: всплывёт список подходящих
-   (с сигнатурами), ↑/↓ и Enter — выбрать. Или открой **Справку** и нажми
-   **«Попробовать»** у примера.
-5. Правь текст как в обычном блокноте (стрелки, выделение, копипаст); каждая строка
-   пересчитывается по Enter. Ошибка в строке — красным, соседние не трогает.
-6. **Сохрани** результат в `*.calc` (потом **Открыть**); при желании — «поверх всех
-   окон» и размер шрифта на тулбаре. Текст и так автосохраняется между запусками.
+1. Launch `calc-notepad` — a window opens with a few example lines.
+2. Type an expression (e.g. `2 + 2 * 3`) and press **Enter** — the result appears on the
+   line below, in green.
+3. Declare variables and functions as you go: `price = 1990`, then on the next line
+   `price * 12` — the assignment is silent, the expression is evaluated. State is visible
+   to all lines below.
+4. Forgot a function name — start typing and press **Tab**: a list of matches (with
+   signatures) pops up; ↑/↓ and Enter to pick. Or open **Help** and click **Try** on an
+   example.
+5. Edit the text like an ordinary notepad (arrows, selection, copy/paste); each line is
+   recomputed on Enter. An error on a line shows in red and does not affect its neighbours.
+6. **Save** the result to `*.calc` (later **Open**); optionally toggle "always on top" and
+   the font size on the toolbar. The text is autosaved between runs anyway.
 
-### Единое поле ввода-вывода
+### A single input/output field
 
-Ввод и вывод — **одно поле**, как в оригинале (не блокнот + отдельная колонка
-результатов). Пишешь выражение, жмёшь **Enter** — результат появляется строкой **ниже,
-зелёным**, прямо под выражением. Редактируется как обычный многострочный редактор:
-стрелки, курсор, выделение, копипаст — всё нативно.
+Input and output are **one field**, as in the original (not a notepad plus a separate
+results column). You write an expression, press **Enter** — the result appears on the line
+**below, in green**, right under the expression. It edits like a normal multiline editor:
+arrows, cursor, selection, copy/paste — all native.
 
-Логика построчная и независимая:
+The logic is per-line and independent:
 
-- присваивания и незаконченные/синтаксически неполные строки **молчат** (результата нет);
-- только «голое» выражение даёт зелёный результат;
-- ошибка выполнения (деление на ноль, неизвестная переменная) — **красным**;
-- ошибка в одной строке не обнуляет соседние; состояние (переменные, функции)
-  накапливается сверху вниз.
+- assignments and unfinished/syntactically incomplete lines are **silent** (no result);
+- only a bare expression yields a green result;
+- a runtime error (division by zero, unknown variable) shows in **red**;
+- an error on one line does not blank the others; state (variables, functions) accumulates
+  top to bottom.
 
-### Справка и автоподстановка
+### Help and autocomplete
 
-- **Справка** (кнопка на тулбаре) — окно с поиском и списком функций по категориям
-  слева и двуязычной статьёй справа (сигнатура, назначение RU/EN, пример, примечания
-  об ошибках). Кнопка **«Попробовать»** вставляет пример в блокнот и сразу считает его;
-  **«Вставить»** — подставляет `Имя(` для ручного заполнения.
-- **Автоподстановка по Tab**: набери префикс имени и нажми **Tab** — всплывёт список
-  подходящих функций (с сигнатурами) у курсора. ↑/↓ — выбор, Enter/Tab — вставить
-  `Имя(`, Esc — закрыть. Единственное совпадение подставляется сразу.
+- **Help** (a toolbar button) — a window with search and a category-grouped function list
+  on the left and a bilingual article on the right (signature, RU/EN description, example,
+  error notes). The **Try** button inserts the example into the notepad and computes it
+  immediately; **Insert** puts in `Name(` for you to fill in manually.
+- **Tab autocomplete**: type a name prefix and press **Tab** — a list of matching functions
+  (with signatures) pops up at the cursor. ↑/↓ to select, Enter/Tab to insert `Name(`, Esc
+  to close. A single match is inserted right away.
 
-### Тулбар и прочее
+### Toolbar and the rest
 
-Открыть/Сохранить (`*.calc`), Очистить, Справка, размер шрифта, режим «поверх всех
-окон». Есть подсветка синтаксиса и автосохранение текста между запусками.
+Open/Save (`*.calc`), Clear, Help, font size, "always on top", and an **RU/EN** language
+toggle (button on the right). Switching the language immediately re-renders the error lines;
+the choice is saved between runs. There is syntax highlighting and autosave of the text.
 
-### Бинарники в релизах
+### Release binaries
 
 - `calc-notepad-linux-x64` — Linux (x86_64);
-- `calc-notepad.exe` — Windows (x86_64), кросс-собран из Linux через mingw-w64.
+- `calc-notepad.exe` — Windows (x86_64), cross-compiled from Linux via mingw-w64.
 
-## Синтаксис языка
+## Language syntax
 
-- **Числа**: десятичные (`42`, `3.14`), шестнадцатеричные (`0x1F`), двоичные (`0b1010`),
-  восьмеричные (`0o17`).
-- **Строки**: `"..."`.
-- **Переменные**: `x = expr`.
-- **Пользовательские функции**: `fn name(params) = expr` (тело — одно выражение).
-- **Псевдонимы**: `alias new = existing`.
-- **Циклы**: `while (cond) { ... }`, `repeat N { ... }`.
-- **Вывод**: `print(...)`.
-- **Комментарии**: `# comment` (до конца строки).
-- **Операторы** (от самого слабого к самому сильному связыванию):
-  `||` → `&&` → `== != < <= > >=` → `+ -` → `* / %` → унарные `- !` →
-  `^` (право-ассоциативный, связывает сильнее всех, даже унарного минуса:
+- **Numbers**: decimal (`42`, `3.14`), hexadecimal (`0x1F`), binary (`0b1010`), octal
+  (`0o17`).
+- **Strings**: `"..."`.
+- **Variables**: `x = expr`.
+- **User functions**: `fn name(params) = expr` (the body is a single expression).
+- **Aliases**: `alias new = existing`.
+- **Loops**: `while (cond) { ... }`, `repeat N { ... }`.
+- **Output**: `print(...)`.
+- **Comments**: `# comment` (to the end of the line).
+- **Operators** (from weakest to strongest binding):
+  `||` → `&&` → `== != < <= > >=` → `+ -` → `* / %` → unary `- !` →
+  `^` (right-associative, binds tighter than everything, even unary minus:
   `-2 ^ 2` = `-(2 ^ 2)`).
 
-## Встроенные функции
+## Built-in functions
 
-Полный список — по фактически зарегистрированным именам в `calc-core/src/builtins/`.
+The full list follows the names actually registered in `calc-core/src/builtins/`.
 
-**Математика** (`math.rs`): `Abs`, `Ceil`, `E`, `Exp`, `Fact`, `Floor`, `Frac`, `Gcd`,
+**Math** (`math.rs`): `Abs`, `Ceil`, `E`, `Exp`, `Fact`, `Floor`, `Frac`, `Gcd`,
 `Hypot`, `Lcm`, `Ln`, `Log`, `Log10`, `Log2`, `Max`, `Min`, `Pi`, `Pow`, `Round`,
 `Sign`, `Sqr`, `Sqrt`, `Trunc`.
 
-**Тригонометрия** (`trig.rs`): `Sin`, `Cos`, `Tan`, `Cotan`, `SinH`, `CosH`, `TanH`,
+**Trigonometry** (`trig.rs`): `Sin`, `Cos`, `Tan`, `Cotan`, `SinH`, `CosH`, `TanH`,
 `ArcSin`, `ArcCos`, `ArcTan`, `ArcSinH`, `ArcCosH`, `ArcTanH`, `DegToRad`, `RadToDeg`.
 
-**Системы счисления** (`bases.rs`): `IntToBase`, `BaseToInt`, `IntToHex`, `HexToInt`,
-`IntToBin`, `BinToInt`, `IntToOct`, `OctToInt`, `IntToRoman`, `RomanToInt`. Произвольная
-база `IntToBase`/`BaseToInt` поддерживает диапазон 2..36.
+**Number systems** (`bases.rs`): `IntToBase`, `BaseToInt`, `IntToHex`, `HexToInt`,
+`IntToBin`, `BinToInt`, `IntToOct`, `OctToInt`, `IntToRoman`, `RomanToInt`. Arbitrary-base
+`IntToBase`/`BaseToInt` supports the range 2..36.
 
-**Биты** (`bits.rs`): `And`, `Or`, `Xor`, `Not`, `Shl`, `Shr`, `BitSet`, `BitClear`,
+**Bits** (`bits.rs`): `And`, `Or`, `Xor`, `Not`, `Shl`, `Shr`, `BitSet`, `BitClear`,
 `BitToggle`, `BitTest`.
 
-**Строки** (`strings.rs`): `Length`, `Concat`, `Copy`, `Pos`, `Replace`, `Upper`,
+**Strings** (`strings.rs`): `Length`, `Concat`, `Copy`, `Pos`, `Replace`, `Upper`,
 `Lower`, `Trim`, `TrimLeft`, `TrimRight`, `Reverse`, `Compare`, `Chr`, `Ord`.
 
-**Хеши** (`hash.rs`): диспетчер `Hash(alg, data)` (алгоритмы: `md5`, `sha1`, `sha224`,
-`sha256`, `sha384`, `sha512`, `sha3_256`, `sha3_512`, `ripemd160`, `tiger`, `crc32`,
-`adler32`, регистр не важен) + прямые функции-алиасы `Md5`, `Sha1`, `Sha224`, `Sha256`,
-`Sha384`, `Sha512`, `Sha3_256`, `Sha3_512`, `RipeMD160`, `Tiger`, `Crc32`, `Adler32`.
+**Hashes** (`hash.rs`): the dispatcher `Hash(alg, data)` (algorithms: `md5`, `sha1`,
+`sha224`, `sha256`, `sha384`, `sha512`, `sha3_256`, `sha3_512`, `ripemd160`, `tiger`,
+`crc32`, `adler32`, case-insensitive) plus direct alias functions `Md5`, `Sha1`, `Sha224`,
+`Sha256`, `Sha384`, `Sha512`, `Sha3_256`, `Sha3_512`, `RipeMD160`, `Tiger`, `Crc32`,
+`Adler32`.
 
-**Шифры** (`cipher.rs`): `Encrypt(alg, keyHex, data)`, `Decrypt(alg, keyHex, dataHex)`.
+**Ciphers** (`cipher.rs`): `Encrypt(alg, keyHex, data)`, `Decrypt(alg, keyHex, dataHex)`.
 
-**Файлы** (`fileio.rs`): `FileToStr`, `StrToFile`, `AppendFile`.
+**Files** (`fileio.rs`): `FileToStr`, `StrToFile`, `AppendFile`.
 
-**Дата/время** (`datetime.rs`): `Now`, `FormatFloat`.
+**Date & time** (`datetime.rs`): `Now`, `FormatFloat`.
 
-**Вывод**: `print`.
+**Output**: `print`.
 
-## Известные ограничения (v1)
+## Known limitations (v1)
 
-- **Числа**: целые `i128` и вещественные `f64` (double); произвольной точности
-  (bignum) нет.
-- **Шифры**: только AES-128/192/256-CBC (алгоритм задаётся строкой `aes` или
-  `rijndael` — псевдонимы одного и того же), PKCS7-паддинг, с ФИКСИРОВАННЫМ нулевым
-  IV — детерминированно (удобно для тестов/повторяемости), но **не безопасно** для
-  реального шифрования. Экзотические шифры оригинала (Blowfish, DES, Twofish,
-  Serpent, CAST, IDEA, TEA, Ice, MARS, Misty1) не включены.
-- **Хеши**: MD5, SHA-1, SHA-2 (224/256/384/512), SHA-3 (256/512), RIPEMD-160, Tiger,
-  CRC32, Adler32; экзотические алгоритмы оригинала (Haval, Gost и т.п.) не включены.
-- **Предохранители**: глубина вложенности выражений ≤ 150, глубина рекурсии
-  пользовательских функций ≤ 512, число итераций цикла (`while`/`repeat`) ≤ 1 000 000 —
-  при превышении возвращается ошибка (защита от переполнения стека и зависаний).
-- **Дата/время**: минимальные (`Now`, `FormatFloat`), без полноценного календаря.
-- **Файлы**: `FileToStr`/`StrToFile`/`AppendFile` работают с любыми путями в пределах
-  прав запускающего пользователя — песочницы/ограничения путей нет (локальный CLI-инструмент).
-- **Многострочные конструкции в notepad**: блокнот считает каждую строку ввода
-  независимо (пересчёт по Enter), поэтому цикл или блок, растянутый на несколько строк
-  (`while (c) {` … `}`), в блокноте не работает — только однострочная запись. Для
-  многострочных скриптов используйте CLI (`calc --file`). В самом ядре многострочные
-  циклы/блоки поддержаны полностью.
+- **Numbers**: `i128` integers and `f64` (double) reals; no arbitrary precision (bignum).
+- **Ciphers**: only AES-128/192/256-CBC (the algorithm is given as the string `aes` or
+  `rijndael` — aliases of the same thing), PKCS7 padding, with a FIXED zero IV —
+  deterministic (handy for tests/reproducibility) but **not secure** for real encryption.
+  The original's exotic ciphers (Blowfish, DES, Twofish, Serpent, CAST, IDEA, TEA, Ice,
+  MARS, Misty1) are not included.
+- **Hashes**: MD5, SHA-1, SHA-2 (224/256/384/512), SHA-3 (256/512), RIPEMD-160, Tiger,
+  CRC32, Adler32; the original's exotic algorithms (Haval, Gost, etc.) are not included.
+- **Guards**: expression nesting depth ≤ 150, user-function recursion depth ≤ 512, loop
+  iteration count (`while`/`repeat`) ≤ 1,000,000 — exceeding any returns an error (protection
+  against stack overflow and hangs).
+- **Date/time**: minimal (`Now`, `FormatFloat`), no full calendar.
+- **Files**: `FileToStr`/`StrToFile`/`AppendFile` work with any path within the invoking
+  user's permissions — there is no sandbox or path restriction (a local CLI tool).
+- **Multiline constructs in the notepad**: the notepad evaluates each input line
+  independently (recompute on Enter), so a loop or block spread across several lines
+  (`while (c) {` … `}`) does not work in the notepad — only single-line form. For multiline
+  scripts use the CLI (`calc --file`). The core itself fully supports multiline loops/blocks.
 
-## Статус
+## Status
 
-v0.2.5. Весь workspace покрыт тестами (132 теста: core + notepad), clippy `-D warnings`
-чист. Готовы оба фронтенда — CLI и GUI-блокнот. Сборки exe + Linux публикуются по тегу
-в релизы.
+v0.2.5. The whole workspace is covered by tests (135 tests: core + notepad), clippy
+`-D warnings` is clean. Both frontends are ready — the CLI and the GUI notepad, with an
+RU/EN language toggle. exe + Linux builds are published to releases on tag.
 
-## Лицензия
+## License
 
 MIT.
