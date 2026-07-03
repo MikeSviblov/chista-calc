@@ -7,6 +7,7 @@ pub struct NotepadApp {
     first_frame: bool,
     status: Option<String>,
     help: crate::panels::HelpState,
+    complete: crate::complete::CompleteState,
 }
 
 impl NotepadApp {
@@ -21,6 +22,7 @@ impl NotepadApp {
             first_frame: true,
             status: None,
             help: crate::panels::HelpState::default(),
+            complete: crate::complete::CompleteState::default(),
         }
     }
 
@@ -94,7 +96,7 @@ impl eframe::App for NotepadApp {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if crate::transcript::show(ui, &mut self.sheet, self.font_size) {
+            if crate::transcript::show(ui, &mut self.sheet, self.font_size, &mut self.complete) {
                 self.persist();
             }
         });
