@@ -1,0 +1,8 @@
+# Обратный отсчёт.
+# Запуск: calc --file examples/countdown.calc
+n = 5
+while (n > 0) {
+    print("осталось:", n)
+    n = n - 1
+}
+print("Пуск!")

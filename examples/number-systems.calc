@@ -1,0 +1,9 @@
+# Системы счисления: римские, hex/bin, произвольная база 2..36.
+# Запуск: calc --file examples/number-systems.calc
+print("2024 римскими:", IntToRoman(2024))
+print("MMXXIV в число:", RomanToInt("MMXXIV"))
+print("255 в hex:", IntToHex(255))
+print("255 в двоичной:", IntToBase(255, 2))
+print("255 в base36:", IntToBase(255, 36))
+print("FF (hex) в число:", HexToInt("FF"))
+print("1010 (bin) в число:", BinToInt("1010"))

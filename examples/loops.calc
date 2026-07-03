@@ -1,0 +1,38 @@
+# Циклы while и repeat. В языке нет if — ветвление только через условие while.
+# Запуск: calc --file examples/loops.calc
+
+# Сумма 1..100
+s = 0
+i = 1
+while (i <= 100) { s = s + i; i = i + 1 }
+print("Сумма 1..100:", s)
+
+# Факториал 6 циклом
+f = 1
+k = 2
+while (k <= 6) { f = f * k; k = k + 1 }
+print("6! =", f)
+
+# Фибоначчи: 10-е число
+a = 0
+b = 1
+n = 0
+while (n < 10) { t = a + b; a = b; b = t; n = n + 1 }
+print("Фибоначчи(10):", a)
+
+# НОД по Евклиду
+x = 48
+y = 36
+while (y != 0) { t = y; y = x % y; x = t }
+print("НОД(48,36):", x)
+
+# Сумма цифр (деление настоящее — целую часть берём через Trunc)
+m = 12345
+ds = 0
+while (m > 0) { ds = ds + m % 10; m = Trunc(m / 10) }
+print("Сумма цифр 12345:", ds)
+
+# repeat N { ... }
+c = 0
+repeat 7 { c = c + 1 }
+print("repeat 7 раз:", c)

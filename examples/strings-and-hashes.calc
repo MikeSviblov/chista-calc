@@ -1,0 +1,10 @@
+# Строки и хеши.
+# Запуск: calc --file examples/strings-and-hashes.calc
+print("Верхний регистр:", Upper(Concat("hello", " world")))
+print("Разворот:", Reverse("racecar"))
+print("Длина 'привет' (символов):", Length("привет"))
+print("Подстрока Copy(2,3):", Copy("abcdef", 2, 3))
+print("Позиция 'cd' в 'abcdef':", Pos("cd", "abcdef"))
+print("SHA-256 'test':", Sha256("test"))
+print("MD5 'abc':", Md5("abc"))
+print("Через диспетчер Hash:", Hash("sha1", "test"))

@@ -1,0 +1,10 @@
+# Пользовательские функции (тело — одно выражение) и их композиция.
+# Запуск: calc --file examples/functions.calc
+fn hyp(a, b) = Sqrt(a*a + b*b)
+fn area(w, h) = w * h
+fn f(x) = x * x
+fn g(x) = x + 1
+
+print("Гипотенуза (3,4):", hyp(3, 4))
+print("Площадь 3x4:", area(3, 4))
+print("f(g(3)) = (3+1)^2 =", f(g(3)))
