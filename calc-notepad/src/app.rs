@@ -1,6 +1,13 @@
 use crate::sheet::Sheet;
 use calc_core::Lang;
 
+/// Какой файловый диалог показать (отложенно — см. `pending_dialog`).
+#[derive(Clone, Copy)]
+enum DialogKind {
+    Open,
+    Save,
+}
+
 pub struct NotepadApp {
     sheet: Sheet,
     font_size: f32,
@@ -10,6 +17,9 @@ pub struct NotepadApp {
     status: Option<String>,
     help: crate::panels::HelpState,
     complete: crate::complete::CompleteState,
+    /// Отложенный файловый диалог: при «поверх окон» окно сначала опускается на
+    /// кадр (иначе нативный диалог уходит под него), потом показываем диалог.
+    pending_dialog: Option<DialogKind>,
 }
 
 impl NotepadApp {
@@ -27,6 +37,7 @@ impl NotepadApp {
             status: None,
             help: crate::panels::HelpState::default(),
             complete: crate::complete::CompleteState::default(),
+            pending_dialog: None,
         }
     }
 
@@ -38,10 +49,58 @@ impl NotepadApp {
             lang: self.lang.code().to_string(),
         });
     }
+
+    /// Запрос на файловый диалог. При «поверх окон» откладываем на следующий кадр,
+    /// предварительно опустив окно, чтобы диалог не оказался под ним.
+    fn request_dialog(&mut self, kind: DialogKind, ctx: &egui::Context) {
+        if self.always_on_top {
+            self.pending_dialog = Some(kind);
+            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::Normal));
+            ctx.request_repaint();
+        } else {
+            self.run_dialog(kind);
+        }
+    }
+
+    /// Синхронно показывает нативный диалог и применяет результат.
+    fn run_dialog(&mut self, kind: DialogKind) {
+        let t = crate::i18n::ui(self.lang);
+        match kind {
+            DialogKind::Open => {
+                if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc", "txt"]).pick_file() {
+                    match std::fs::read_to_string(&path) {
+                        Ok(s) => {
+                            self.sheet = Sheet::from_input(&s, self.lang);
+                            self.persist();
+                            self.status = Some(crate::i18n::fill(t.opened, &path.display().to_string()));
+                        }
+                        Err(e) => self.status = Some(crate::i18n::fill(t.open_err, &e.to_string())),
+                    }
+                }
+            }
+            DialogKind::Save => {
+                if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc"]).save_file() {
+                    self.status = Some(match std::fs::write(&path, self.sheet.input()) {
+                        Ok(()) => crate::i18n::fill(t.saved, &path.display().to_string()),
+                        Err(e) => crate::i18n::fill(t.save_err, &e.to_string()),
+                    });
+                }
+            }
+        }
+    }
 }
 
 impl eframe::App for NotepadApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Отложенный диалог: окно опущено в прошлом кадре — теперь диалог не под ним.
+        if let Some(kind) = self.pending_dialog.take() {
+            self.run_dialog(kind);
+            if self.always_on_top {
+                // Вернуть режим «поверх окон» после закрытия диалога.
+                ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(egui::WindowLevel::AlwaysOnTop));
+            }
+        }
+
         if self.first_frame {
             self.first_frame = false;
             if self.always_on_top {
@@ -49,7 +108,6 @@ impl eframe::App for NotepadApp {
             }
         }
 
-        let t = crate::i18n::ui(self.lang);
         let acts = crate::panels::toolbar(ctx, self.always_on_top, self.status.as_deref(), self.lang);
         if acts.font_delta != 0.0 {
             self.font_size = (self.font_size + acts.font_delta).clamp(8.0, 40.0);
@@ -78,26 +136,10 @@ impl eframe::App for NotepadApp {
             self.persist();
         }
         if acts.open {
-            if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc", "txt"]).pick_file() {
-                match std::fs::read_to_string(&path) {
-                    Ok(s) => {
-                        self.sheet = Sheet::from_input(&s, self.lang);
-                        self.persist();
-                        self.status = Some(crate::i18n::fill(t.opened, &path.display().to_string()));
-                    }
-                    Err(e) => {
-                        self.status = Some(crate::i18n::fill(t.open_err, &e.to_string()))
-                    }
-                }
-            }
+            self.request_dialog(DialogKind::Open, ctx);
         }
         if acts.save {
-            if let Some(path) = rfd::FileDialog::new().add_filter("calc", &["calc"]).save_file() {
-                self.status = Some(match std::fs::write(&path, self.sheet.input()) {
-                    Ok(()) => crate::i18n::fill(t.saved, &path.display().to_string()),
-                    Err(e) => crate::i18n::fill(t.save_err, &e.to_string()),
-                });
-            }
+            self.request_dialog(DialogKind::Save, ctx);
         }
 
         // Окно справки добавляет строку ввода: «Вставить» — `Имя(`, «Попробовать» —
