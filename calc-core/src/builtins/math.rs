@@ -1,5 +1,5 @@
 use super::arity;
-use crate::error::{CalcError, Pos, Result};
+use crate::error::{CalcError, Pos, Reason, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -8,7 +8,7 @@ fn to_i128_checked(f: f64, pos: Pos) -> Result<i128> {
     if f.is_finite() && f >= -(2f64.powi(127)) && f < 2f64.powi(127) {
         Ok(f as i128)
     } else {
-        Err(CalcError::RangeError { msg: "переполнение".into(), pos })
+        Err(CalcError::RangeError { msg: Reason::Overflow, pos })
     }
 }
 
@@ -30,9 +30,9 @@ pub fn register(r: &mut Registry) {
     r.register("Abs", |a, pos| {
         arity(a, 1, "Abs", pos)?;
         match &a[0] {
-            Value::Int(i) => i.checked_abs().map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }),
+            Value::Int(i) => i.checked_abs().map(Value::Int).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos }),
             Value::Float(f) => Ok(Value::Float(f.abs())),
-            _ => Err(CalcError::RangeError { msg: "ожидалось число".into(), pos }),
+            _ => Err(CalcError::RangeError { msg: Reason::ExpectedNumber, pos }),
         }
     });
     r.register("Sqrt", |a, pos| {
@@ -74,16 +74,16 @@ pub fn register(r: &mut Registry) {
     r.register("Sqr", |a, pos| {
         arity(a, 1, "Sqr", pos)?;
         match &a[0] {
-            Value::Int(i) => i.checked_mul(*i).map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos }),
+            Value::Int(i) => i.checked_mul(*i).map(Value::Int).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos }),
             Value::Float(f) => Ok(Value::Float(f * f)),
-            _ => Err(CalcError::RangeError { msg: "ожидалось число".into(), pos }),
+            _ => Err(CalcError::RangeError { msg: Reason::ExpectedNumber, pos }),
         }
     });
     r.register("Pow", |a, pos| {
         arity(a, 2, "Pow", pos)?;
         match (&a[0], &a[1]) {
             (Value::Int(base), Value::Int(exp)) if *exp >= 0 && *exp <= u32::MAX as i128 => {
-                base.checked_pow(*exp as u32).map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })
+                base.checked_pow(*exp as u32).map(Value::Int).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })
             }
             _ => {
                 let base = a[0].as_float(pos)?;
@@ -148,7 +148,7 @@ pub fn register(r: &mut Registry) {
         arity(a, 2, "Gcd", pos)?;
         let x = a[0].as_int(pos)?;
         let y = a[1].as_int(pos)?;
-        let g = gcd_i128(x, y).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
+        let g = gcd_i128(x, y).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
         Ok(Value::Int(g))
     });
     r.register("Lcm", |a, pos| {
@@ -158,22 +158,22 @@ pub fn register(r: &mut Registry) {
         if x == 0 || y == 0 {
             return Ok(Value::Int(0));
         }
-        let g = gcd_i128(x, y).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
-        let xa = x.checked_abs().ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
-        let ya = y.checked_abs().ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
-        let result = (xa / g).checked_mul(ya).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
+        let g = gcd_i128(x, y).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
+        let xa = x.checked_abs().ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
+        let ya = y.checked_abs().ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
+        let result = (xa / g).checked_mul(ya).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
         Ok(Value::Int(result))
     });
     r.register("Fact", |a, pos| {
         arity(a, 1, "Fact", pos)?;
         let n = a[0].as_int(pos)?;
         if n < 0 {
-            return Err(CalcError::RangeError { msg: "факториал отрицательного числа".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::FactorialNegative, pos });
         }
         let mut result: i128 = 1;
         let mut i: i128 = 2;
         while i <= n {
-            result = result.checked_mul(i).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
+            result = result.checked_mul(i).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
             i += 1;
         }
         Ok(Value::Int(result))

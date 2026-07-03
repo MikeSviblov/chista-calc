@@ -1,5 +1,5 @@
 use super::arity;
-use crate::error::{CalcError, Pos, Result};
+use crate::error::{CalcError, Pos, Reason, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -23,7 +23,7 @@ fn hash_bytes(alg: &str, data: &[u8], pos: Pos) -> Result<String> {
         "tiger" => digest_hex::<tiger::Tiger>(data),
         "crc32" => format!("{:08x}", crc32fast::hash(data)),
         "adler32" => format!("{:08x}", adler::adler32_slice(data)),
-        _ => return Err(CalcError::RangeError { msg: format!("неизвестный алгоритм хеша '{alg}'"), pos }),
+        _ => return Err(CalcError::RangeError { msg: Reason::UnknownHash(alg.to_string()), pos }),
     };
     Ok(out)
 }

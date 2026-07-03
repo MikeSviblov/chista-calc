@@ -10,6 +10,8 @@ pub mod registry;
 pub mod value;
 
 pub use error::CalcError;
+pub use error::Lang;
+pub use error::Reason;
 pub use eval::Evaluator;
 pub use eval::StmtOutcome;
 pub use value::Value;

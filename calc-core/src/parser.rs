@@ -1,5 +1,5 @@
 use crate::ast::{BinOp, Expr, Stmt, UnOp};
-use crate::error::{CalcError, Result};
+use crate::error::{CalcError, Reason, Result};
 use crate::lexer::{Token, TokenKind};
 
 const MAX_DEPTH: usize = 256;
@@ -34,7 +34,10 @@ impl Parser {
             Ok(self.advance())
         } else {
             Err(CalcError::SyntaxError {
-                msg: format!("Ожидалось {:?}, но встретилось {:?}", want, self.peek()),
+                msg: Reason::ExpectedToken {
+                    expected: format!("{:?}", want),
+                    found: format!("{:?}", self.peek()),
+                },
                 pos: self.peek_pos(),
             })
         }
@@ -48,7 +51,7 @@ impl Parser {
             }
         } else {
             Err(CalcError::SyntaxError {
-                msg: format!("Ожидался идентификатор, но встретилось {:?}", self.peek()),
+                msg: Reason::ExpectedIdent(format!("{:?}", self.peek())),
                 pos: self.peek_pos(),
             })
         }
@@ -155,7 +158,7 @@ impl Parser {
         if self.depth > MAX_DEPTH {
             self.depth -= 1;
             return Err(CalcError::SyntaxError {
-                msg: "Слишком глубокая вложенность выражения".into(),
+                msg: Reason::ExprNestingTooDeep,
                 pos: self.peek_pos(),
             });
         }
@@ -247,7 +250,7 @@ impl Parser {
                 Ok(Expr::Unary { op: UnOp::Not, rhs: Box::new(rhs), pos: tok.pos })
             }
             other => Err(CalcError::SyntaxError {
-                msg: format!("Ожидалось выражение, но встретилось {:?}", other),
+                msg: Reason::ExpectedExpression(format!("{:?}", other)),
                 pos: tok.pos,
             }),
         }

@@ -1,6 +1,6 @@
 //! Шифры v1: AES-CBC, PKCS7, ФИКСИРОВАННЫЙ нулевой IV (детерминизм; НЕ безопасно для реального шифрования).
 use super::arity;
-use crate::error::{CalcError, Pos, Result};
+use crate::error::{CalcError, Pos, Reason, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -11,17 +11,17 @@ use cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 
 fn parse_key(key_hex: &str, pos: Pos) -> Result<Vec<u8>> {
     let key = hex::decode(key_hex)
-        .map_err(|e| CalcError::RangeError { msg: format!("некорректный hex ключа: {e}"), pos })?;
+        .map_err(|e| CalcError::RangeError { msg: Reason::BadKeyHex(e.to_string()), pos })?;
     match key.len() {
         16 | 24 | 32 => Ok(key),
-        _ => Err(CalcError::RangeError { msg: "длина ключа должна быть 16/24/32 байта".into(), pos }),
+        _ => Err(CalcError::RangeError { msg: Reason::KeyLength, pos }),
     }
 }
 
 fn encrypt(alg: &str, key_hex: &str, plaintext: &str, pos: Pos) -> Result<String> {
     match alg.to_lowercase().as_str() {
         "aes" | "rijndael" => {}
-        _ => return Err(CalcError::RangeError { msg: format!("неизвестный/неподдерживаемый шифр '{alg}'"), pos }),
+        _ => return Err(CalcError::RangeError { msg: Reason::UnknownCipher(alg.to_string()), pos }),
     }
     let key = parse_key(key_hex, pos)?;
     let iv = [0u8; 16];
@@ -38,25 +38,25 @@ fn encrypt(alg: &str, key_hex: &str, plaintext: &str, pos: Pos) -> Result<String
 fn decrypt(alg: &str, key_hex: &str, ct_hex: &str, pos: Pos) -> Result<String> {
     match alg.to_lowercase().as_str() {
         "aes" | "rijndael" => {}
-        _ => return Err(CalcError::RangeError { msg: format!("неизвестный/неподдерживаемый шифр '{alg}'"), pos }),
+        _ => return Err(CalcError::RangeError { msg: Reason::UnknownCipher(alg.to_string()), pos }),
     }
     let key = parse_key(key_hex, pos)?;
     let ct = hex::decode(ct_hex)
-        .map_err(|e| CalcError::RangeError { msg: format!("некорректный hex шифротекста: {e}"), pos })?;
+        .map_err(|e| CalcError::RangeError { msg: Reason::BadCiphertextHex(e.to_string()), pos })?;
     let iv = [0u8; 16];
     let pt = match key.len() {
         16 => Decryptor::<Aes128>::new(key.as_slice().into(), &iv.into())
             .decrypt_padded_vec_mut::<Pkcs7>(&ct)
-            .map_err(|_| CalcError::RangeError { msg: "ошибка расшифровки".into(), pos })?,
+            .map_err(|_| CalcError::RangeError { msg: Reason::DecryptFailed, pos })?,
         24 => Decryptor::<Aes192>::new(key.as_slice().into(), &iv.into())
             .decrypt_padded_vec_mut::<Pkcs7>(&ct)
-            .map_err(|_| CalcError::RangeError { msg: "ошибка расшифровки".into(), pos })?,
+            .map_err(|_| CalcError::RangeError { msg: Reason::DecryptFailed, pos })?,
         32 => Decryptor::<Aes256>::new(key.as_slice().into(), &iv.into())
             .decrypt_padded_vec_mut::<Pkcs7>(&ct)
-            .map_err(|_| CalcError::RangeError { msg: "ошибка расшифровки".into(), pos })?,
+            .map_err(|_| CalcError::RangeError { msg: Reason::DecryptFailed, pos })?,
         _ => unreachable!("parse_key гарантирует длину 16/24/32"),
     };
-    String::from_utf8(pt).map_err(|_| CalcError::RangeError { msg: "расшифрованные данные не являются валидным UTF-8".into(), pos })
+    String::from_utf8(pt).map_err(|_| CalcError::RangeError { msg: Reason::DecryptNotUtf8, pos })
 }
 
 pub fn register(r: &mut Registry) {

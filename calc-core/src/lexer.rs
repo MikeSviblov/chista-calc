@@ -1,4 +1,4 @@
-use crate::error::CalcError;
+use crate::error::{CalcError, Reason};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
@@ -152,7 +152,7 @@ pub fn tokenize(src: &str) -> crate::error::Result<Vec<Token>> {
         }
 
         return Err(CalcError::SyntaxError {
-            msg: format!("Неизвестный символ '{c}'"),
+            msg: Reason::UnknownChar(c),
             pos: start,
         });
     }
@@ -221,7 +221,7 @@ fn lex_number(chars: &[char], start: usize) -> crate::error::Result<(TokenKind, 
     let text: String = chars[start..j].iter().collect();
     if is_float {
         let value = text.parse::<f64>().map_err(|_| CalcError::SyntaxError {
-            msg: format!("Некорректное число '{text}'"),
+            msg: Reason::InvalidNumber(text.clone()),
             pos: start,
         })?;
         Ok((TokenKind::Float(value), j))
@@ -238,9 +238,9 @@ fn parse_int(digits: &str, radix: u32, display: &str, start: usize) -> crate::er
             let msg = if *e.kind() == std::num::IntErrorKind::PosOverflow
                 || *e.kind() == std::num::IntErrorKind::NegOverflow
             {
-                "Число слишком большое".to_string()
+                Reason::NumberTooLarge
             } else {
-                format!("Некорректное число '{display}'")
+                Reason::InvalidNumber(display.to_string())
             };
             CalcError::SyntaxError { msg, pos: start }
         })
@@ -252,7 +252,7 @@ fn lex_string(chars: &[char], start: usize) -> crate::error::Result<(String, usi
     loop {
         if i >= chars.len() {
             return Err(CalcError::SyntaxError {
-                msg: "Незакрытая строка".into(),
+                msg: Reason::UnterminatedString,
                 pos: start,
             });
         }
@@ -265,7 +265,7 @@ fn lex_string(chars: &[char], start: usize) -> crate::error::Result<(String, usi
                 i += 1;
                 if i >= chars.len() {
                     return Err(CalcError::SyntaxError {
-                        msg: "Незакрытая строка".into(),
+                        msg: Reason::UnterminatedString,
                         pos: start,
                     });
                 }
@@ -337,7 +337,7 @@ mod tests {
         assert_eq!(
             e,
             crate::error::CalcError::SyntaxError {
-                msg: "Некорректное число '0xZZ'".into(),
+                msg: crate::error::Reason::InvalidNumber("0xZZ".into()),
                 pos: 0,
             }
         );

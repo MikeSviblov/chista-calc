@@ -1,5 +1,5 @@
 use super::arity;
-use crate::error::{CalcError, Pos, Result};
+use crate::error::{CalcError, Pos, Reason, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -12,7 +12,7 @@ const ROMAN_TABLE: &[(i128, &str)] = &[
 
 fn int_to_base(n: i128, base: i128, pos: Pos) -> Result<Value> {
     if !(2..=36).contains(&base) {
-        return Err(CalcError::RangeError { msg: "база должна быть в диапазоне 2..=36".into(), pos });
+        return Err(CalcError::RangeError { msg: Reason::BaseOutOfRange, pos });
     }
     if n == 0 {
         return Ok(Value::Str("0".into()));
@@ -34,14 +34,14 @@ fn int_to_base(n: i128, base: i128, pos: Pos) -> Result<Value> {
 
 fn base_to_int(s: &str, base: i128, pos: Pos) -> Result<Value> {
     if !(2..=36).contains(&base) {
-        return Err(CalcError::RangeError { msg: "база должна быть в диапазоне 2..=36".into(), pos });
+        return Err(CalcError::RangeError { msg: Reason::BaseOutOfRange, pos });
     }
     let (neg, digits) = match s.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, s),
     };
     if digits.is_empty() {
-        return Err(CalcError::RangeError { msg: "пустая строка".into(), pos });
+        return Err(CalcError::RangeError { msg: Reason::EmptyString, pos });
     }
     let mut value: i128 = 0;
     for c in digits.chars() {
@@ -49,12 +49,12 @@ fn base_to_int(s: &str, base: i128, pos: Pos) -> Result<Value> {
         let d = ALPHA[..base as usize]
             .iter()
             .position(|&b| b == cu)
-            .ok_or(CalcError::RangeError { msg: format!("недопустимая цифра '{c}' для базы {base}"), pos })?
+            .ok_or(CalcError::RangeError { msg: Reason::InvalidDigitForBase { c, base: base as u32 }, pos })?
             as i128;
         value = value
             .checked_mul(base)
             .and_then(|v| v.checked_add(d))
-            .ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })?;
+            .ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })?;
     }
     Ok(Value::Int(if neg { -value } else { value }))
 }
@@ -124,7 +124,7 @@ pub fn register(r: &mut Registry) {
         arity(a, 1, "IntToRoman", pos)?;
         let n = a[0].as_int(pos)?;
         if !(1..=3999).contains(&n) {
-            return Err(CalcError::RangeError { msg: "число должно быть в диапазоне 1..=3999".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::RomanOutOfRange, pos });
         }
         Ok(Value::Str(int_to_roman(n)))
     });
@@ -136,10 +136,10 @@ pub fn register(r: &mut Registry) {
         let mut i = 0;
         while i < chars.len() {
             let v = roman_value(chars[i])
-                .ok_or(CalcError::RangeError { msg: format!("недопустимый символ '{}'", chars[i]), pos })?;
+                .ok_or(CalcError::RangeError { msg: Reason::InvalidCharInRoman(chars[i]), pos })?;
             if i + 1 < chars.len() {
                 let next = roman_value(chars[i + 1])
-                    .ok_or(CalcError::RangeError { msg: format!("недопустимый символ '{}'", chars[i + 1]), pos })?;
+                    .ok_or(CalcError::RangeError { msg: Reason::InvalidCharInRoman(chars[i + 1]), pos })?;
                 if v < next {
                     total -= v;
                     i += 1;
@@ -150,7 +150,7 @@ pub fn register(r: &mut Registry) {
             i += 1;
         }
         if !(1..=3999).contains(&total) || int_to_roman(total) != s {
-            return Err(CalcError::RangeError { msg: "недопустимая римская запись".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::InvalidRoman, pos });
         }
         Ok(Value::Int(total))
     });

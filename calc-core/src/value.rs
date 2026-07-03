@@ -1,4 +1,4 @@
-use crate::error::{CalcError, Pos, Result};
+use crate::error::{CalcError, Pos, Reason, Result};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -11,20 +11,20 @@ impl Value {
             Value::Float(f) if f.fract() == 0.0
                 && *f >= i128::MIN as f64 && *f <= i128::MAX as f64 =>
                 Ok(*f as i128),
-            _ => Err(CalcError::RangeError { msg: "ожидалось целое число".into(), pos }),
+            _ => Err(CalcError::RangeError { msg: Reason::ExpectedInt, pos }),
         }
     }
     pub fn as_float(&self, pos: Pos) -> Result<f64> {
         match self {
             Value::Int(i) => Ok(*i as f64),
             Value::Float(f) => Ok(*f),
-            _ => Err(CalcError::RangeError { msg: "ожидалось число".into(), pos }),
+            _ => Err(CalcError::RangeError { msg: Reason::ExpectedNumber, pos }),
         }
     }
     pub fn as_str(&self, pos: Pos) -> Result<&str> {
         match self {
             Value::Str(s) => Ok(s),
-            _ => Err(CalcError::RangeError { msg: "ожидалась строка".into(), pos }),
+            _ => Err(CalcError::RangeError { msg: Reason::ExpectedString, pos }),
         }
     }
     pub fn truthy(&self) -> bool {

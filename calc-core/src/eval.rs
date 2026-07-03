@@ -1,6 +1,6 @@
 use crate::ast::{BinOp, Expr, Stmt, UnOp};
 use crate::env::Env;
-use crate::error::{CalcError, Result};
+use crate::error::{CalcError, Reason, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 pub struct Evaluator { pub env: Env, pub registry: Registry, loop_limit: u64, call_depth: u64, call_limit: u64, expr_depth: u64, expr_limit: u64, output: String }
@@ -48,7 +48,7 @@ impl Evaluator {
                     UnOp::Neg => match v {
                         Value::Int(i) => checked_int(i.checked_neg(), *pos),
                         Value::Float(f) => Ok(Value::Float(-f)),
-                        _ => Err(CalcError::RangeError { msg: "унарный минус к не-числу".into(), pos: *pos }),
+                        _ => Err(CalcError::RangeError { msg: Reason::UnaryMinusNonNumber, pos: *pos }),
                     },
                     UnOp::Not => Ok(Value::Bool(!v.truthy())),
                 }
@@ -159,7 +159,7 @@ fn tick(iters: &mut u64, limit: u64) -> Result<()> {
     Ok(())
 }
 fn checked_int(v: Option<i128>, pos: usize) -> Result<Value> {
-    v.map(Value::Int).ok_or(CalcError::RangeError { msg: "переполнение".into(), pos })
+    v.map(Value::Int).ok_or(CalcError::RangeError { msg: Reason::Overflow, pos })
 }
 fn apply_binop(op: BinOp, l: Value, r: Value, pos: usize) -> Result<Value> {
     use BinOp::*;
@@ -175,15 +175,15 @@ fn apply_binop(op: BinOp, l: Value, r: Value, pos: usize) -> Result<Value> {
                     Rem => match a.checked_rem(b) {
                         Some(v) => Ok(Value::Int(v)),
                         None if b == 0 => Err(CalcError::DivisionByZero { pos }),
-                        None => Err(CalcError::RangeError { msg: "переполнение".into(), pos }),
+                        None => Err(CalcError::RangeError { msg: Reason::Overflow, pos }),
                     },
                     Div => match a.checked_rem(b) {
                         None if b == 0 => Err(CalcError::DivisionByZero { pos }),
-                        None => Err(CalcError::RangeError { msg: "переполнение".into(), pos }),
+                        None => Err(CalcError::RangeError { msg: Reason::Overflow, pos }),
                         Some(0) => checked_int(a.checked_div(b), pos),
                         Some(_) => Ok(Value::Float(a as f64 / b as f64)),
                     },
-                    Pow => { if b < 0 { Ok(Value::Float((a as f64).powf(b as f64))) } else if b > u32::MAX as i128 { Err(CalcError::RangeError { msg: "слишком большая степень".into(), pos }) } else { checked_int(a.checked_pow(b as u32), pos) } }
+                    Pow => { if b < 0 { Ok(Value::Float((a as f64).powf(b as f64))) } else if b > u32::MAX as i128 { Err(CalcError::RangeError { msg: Reason::ExponentTooLarge, pos }) } else { checked_int(a.checked_pow(b as u32), pos) } }
                     _ => unreachable!(),
                 }
             } else {
@@ -315,8 +315,20 @@ mod tests {
             let mut ev = Evaluator::new();
             ev.run(&stmts)
         }
-        assert!(matches!(run_res("fn f(n) = f(n); f(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
-        assert!(matches!(run_res("fn a(n)=b(n); fn b(n)=a(n); a(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
+        // Тест-поток cargo по умолчанию имеет стек 2 МБ — на нём 512 кадров рекурсии
+        // впритык, и любые мелочи кодогенерации сталкивают его в переполнение раньше,
+        // чем сработает предохранитель call_limit. Прогоняем на потоке со стеком 16 МБ
+        // (реальный main-поток приложения имеет ≥8 МБ), где проверяется именно логика:
+        // возвращается ошибка CallDepthExceeded, а не аварийное завершение.
+        std::thread::Builder::new()
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                assert!(matches!(run_res("fn f(n) = f(n); f(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
+                assert!(matches!(run_res("fn a(n)=b(n); fn b(n)=a(n); a(1)"), Err(crate::error::CalcError::CallDepthExceeded { .. })));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
     #[test]
     fn print_returns_first_arg() { assert_eq!(run("print(5)"), Value::Int(5)); }

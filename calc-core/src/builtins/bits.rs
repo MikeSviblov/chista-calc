@@ -1,11 +1,11 @@
 use super::arity;
-use crate::error::{CalcError, Pos, Result};
+use crate::error::{CalcError, Pos, Reason, Result};
 use crate::registry::Registry;
 use crate::value::Value;
 
-fn check_bounded(n: i128, pos: Pos, what: &str) -> Result<u32> {
+fn check_bounded(n: i128, pos: Pos, reason: Reason) -> Result<u32> {
     if !(0..=127).contains(&n) {
-        return Err(CalcError::RangeError { msg: format!("{what} должен быть в диапазоне 0..=127"), pos });
+        return Err(CalcError::RangeError { msg: reason, pos });
     }
     Ok(n as u32)
 }
@@ -30,37 +30,37 @@ pub fn register(r: &mut Registry) {
     r.register("Shl", |a, pos| {
         arity(a, 2, "Shl", pos)?;
         let v = a[0].as_int(pos)?;
-        let s = check_bounded(a[1].as_int(pos)?, pos, "сдвиг")?;
+        let s = check_bounded(a[1].as_int(pos)?, pos, Reason::ShiftOutOfRange)?;
         Ok(Value::Int(v << s))
     });
     r.register("Shr", |a, pos| {
         arity(a, 2, "Shr", pos)?;
         let v = a[0].as_int(pos)?;
-        let s = check_bounded(a[1].as_int(pos)?, pos, "сдвиг")?;
+        let s = check_bounded(a[1].as_int(pos)?, pos, Reason::ShiftOutOfRange)?;
         Ok(Value::Int(v >> s))
     });
     r.register("BitTest", |a, pos| {
         arity(a, 2, "BitTest", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, Reason::BitIndexOutOfRange)?;
         Ok(Value::Bool((v >> n) & 1 == 1))
     });
     r.register("BitSet", |a, pos| {
         arity(a, 2, "BitSet", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, Reason::BitIndexOutOfRange)?;
         Ok(Value::Int(v | (1i128 << n)))
     });
     r.register("BitClear", |a, pos| {
         arity(a, 2, "BitClear", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, Reason::BitIndexOutOfRange)?;
         Ok(Value::Int(v & !(1i128 << n)))
     });
     r.register("BitToggle", |a, pos| {
         arity(a, 2, "BitToggle", pos)?;
         let v = a[0].as_int(pos)?;
-        let n = check_bounded(a[1].as_int(pos)?, pos, "индекс бита")?;
+        let n = check_bounded(a[1].as_int(pos)?, pos, Reason::BitIndexOutOfRange)?;
         Ok(Value::Int(v ^ (1i128 << n)))
     });
 }

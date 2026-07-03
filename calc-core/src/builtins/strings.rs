@@ -1,5 +1,5 @@
 use super::arity;
-use crate::error::CalcError;
+use crate::error::{CalcError, Reason};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -45,10 +45,10 @@ pub fn register(r: &mut Registry) {
         let start = a[1].as_int(pos)?;
         let len = a[2].as_int(pos)?;
         if start < 1 {
-            return Err(CalcError::RangeError { msg: "start должен быть >= 1".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::StartTooSmall, pos });
         }
         if len < 0 {
-            return Err(CalcError::RangeError { msg: "len должен быть >= 0".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::LenNegative, pos });
         }
         let chars: Vec<char> = s.chars().collect();
         let char_count = chars.len() as i128;
@@ -87,18 +87,18 @@ pub fn register(r: &mut Registry) {
         let s = a[0].as_str(pos)?;
         match s.chars().next() {
             Some(c) => Ok(Value::Int(c as i128)),
-            None => Err(CalcError::RangeError { msg: "пустая строка".into(), pos }),
+            None => Err(CalcError::RangeError { msg: Reason::EmptyString, pos }),
         }
     });
     r.register("Chr", |a, pos| {
         arity(a, 1, "Chr", pos)?;
         let n = a[0].as_int(pos)?;
         if n < 0 || n > u32::MAX as i128 {
-            return Err(CalcError::RangeError { msg: "недопустимый код символа".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::InvalidCharCode, pos });
         }
         match char::from_u32(n as u32) {
             Some(c) => Ok(Value::Str(c.to_string())),
-            None => Err(CalcError::RangeError { msg: "недопустимый код символа".into(), pos }),
+            None => Err(CalcError::RangeError { msg: Reason::InvalidCharCode, pos }),
         }
     });
     r.register("Compare", |a, pos| {

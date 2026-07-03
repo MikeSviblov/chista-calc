@@ -1,5 +1,5 @@
 use super::arity;
-use crate::error::CalcError;
+use crate::error::{CalcError, Reason};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -9,7 +9,7 @@ pub fn register(r: &mut Registry) {
         let path = a[0].as_str(pos)?;
         match std::fs::read_to_string(path) {
             Ok(data) => Ok(Value::Str(data)),
-            Err(e) => Err(CalcError::IoError { msg: format!("не удалось прочитать '{path}': {e}") }),
+            Err(e) => Err(CalcError::IoError { msg: Reason::ReadFailed { path: path.to_string(), err: e.to_string() } }),
         }
     });
     r.register("StrToFile", |a, pos| {
@@ -18,7 +18,7 @@ pub fn register(r: &mut Registry) {
         let data = a[1].as_str(pos)?;
         match std::fs::write(path, data) {
             Ok(()) => Ok(Value::Str(data.to_string())),
-            Err(e) => Err(CalcError::IoError { msg: format!("не удалось записать '{path}': {e}") }),
+            Err(e) => Err(CalcError::IoError { msg: Reason::WriteFailed { path: path.to_string(), err: e.to_string() } }),
         }
     });
     r.register("AppendFile", |a, pos| {
@@ -33,7 +33,7 @@ pub fn register(r: &mut Registry) {
             .and_then(|mut f| f.write_all(data.as_bytes()));
         match result {
             Ok(()) => Ok(Value::Str(data.to_string())),
-            Err(e) => Err(CalcError::IoError { msg: format!("не удалось дописать в '{path}': {e}") }),
+            Err(e) => Err(CalcError::IoError { msg: Reason::AppendFailed { path: path.to_string(), err: e.to_string() } }),
         }
     });
 }

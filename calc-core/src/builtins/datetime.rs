@@ -1,5 +1,5 @@
 use super::arity;
-use crate::error::CalcError;
+use crate::error::{CalcError, Reason};
 use crate::registry::Registry;
 use crate::value::Value;
 
@@ -8,7 +8,7 @@ pub fn register(r: &mut Registry) {
         arity(a, 0, "Now", pos)?;
         match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(d) => Ok(Value::Float(d.as_secs_f64())),
-            Err(e) => Err(CalcError::IoError { msg: format!("не удалось получить текущее время: {e}") }),
+            Err(e) => Err(CalcError::IoError { msg: Reason::SystemTime(e.to_string()) }),
         }
     });
     r.register("FormatFloat", |a, pos| {
@@ -16,7 +16,7 @@ pub fn register(r: &mut Registry) {
         let x = a[0].as_float(pos)?;
         let digits = a[1].as_int(pos)?;
         if !(0..=100).contains(&digits) {
-            return Err(CalcError::RangeError { msg: "digits должен быть в диапазоне 0..=100".into(), pos });
+            return Err(CalcError::RangeError { msg: Reason::DigitsOutOfRange, pos });
         }
         Ok(Value::Str(format!("{:.*}", digits as usize, x)))
     });
