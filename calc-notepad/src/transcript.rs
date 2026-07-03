@@ -15,6 +15,7 @@ pub fn show(ui: &mut egui::Ui, sheet: &mut Sheet, font_size: f32, comp: &mut Com
     // строк-результатов) и не должен уводить фокус.
     let tab = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab));
     let mut accept = false;
+    let mut enter_accept = false; // Enter именно как «принять» (для отката к пересчёту)
     let mut open_request = false;
     if comp.open {
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
@@ -28,6 +29,7 @@ pub fn show(ui: &mut egui::Ui, sheet: &mut Sheet, font_size: f32, comp: &mut Com
         }
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
             accept = true;
+            enter_accept = true;
         }
         if tab {
             accept = true;
@@ -78,6 +80,9 @@ pub fn show(ui: &mut egui::Ui, sheet: &mut Sheet, font_size: f32, comp: &mut Com
         }
     }
 
+    // Пересчёт нужен, если Enter не был перехвачен списком.
+    let mut recompute = enter_pressed && out.response.has_focus();
+
     // --- работа с открытым списком: рисуем/принимаем ---
     if comp.open {
         match complete::current_prefix(&sheet.text, cursor) {
@@ -85,6 +90,10 @@ pub fn show(ui: &mut egui::Ui, sheet: &mut Sheet, font_size: f32, comp: &mut Com
                 let m = complete::matches(&prefix);
                 if m.is_empty() {
                     comp.open = false;
+                    // Список опустел, но Enter уже съеден — не теряем его.
+                    if enter_accept && out.response.has_focus() {
+                        recompute = true;
+                    }
                 } else {
                     if comp.selected >= m.len() {
                         comp.selected = m.len() - 1;
@@ -98,12 +107,17 @@ pub fn show(ui: &mut egui::Ui, sheet: &mut Sheet, font_size: f32, comp: &mut Com
                     }
                 }
             }
-            None => comp.open = false,
+            None => {
+                comp.open = false;
+                // Префикс исчез (курсор ушёл) — съеденный Enter отдаём в пересчёт.
+                if enter_accept && out.response.has_focus() {
+                    recompute = true;
+                }
+            }
         }
     }
 
-    // --- пересчёт по ENTER (как раньше), если список не перехватил Enter ---
-    if enter_pressed && out.response.has_focus() {
+    if recompute {
         let new_cursor = sheet.recompute_with_cursor(cursor);
         let mut st = out.state.clone();
         st.cursor.set_char_range(Some(egui::text::CCursorRange::one(
@@ -131,6 +145,9 @@ fn apply_completion(
         egui::text::CCursor::new(new_cursor),
     )));
     st.store(ui.ctx(), out.response.id);
+    // Выбор мышью уводит фокус на кнопку списка — возвращаем его в редактор,
+    // чтобы можно было сразу продолжать ввод.
+    out.response.request_focus();
 }
 
 /// Рисует всплывающий список кандидатов у курсора. Возвращает Some(index), если по
