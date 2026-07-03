@@ -3,6 +3,7 @@ mod app;
 mod complete;
 mod document;
 mod highlight;
+mod i18n;
 mod panels;
 mod settings;
 mod sheet;

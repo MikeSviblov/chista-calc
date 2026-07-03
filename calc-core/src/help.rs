@@ -25,28 +25,52 @@ pub struct HelpEntry {
     pub note_en: &'static str,
 }
 
-/// Порядок категорий для показа и их русские заголовки.
-pub const CATEGORIES: &[(&str, &str)] = &[
-    ("math", "Математика"),
-    ("trig", "Тригонометрия"),
-    ("bits", "Биты"),
-    ("logic", "Логика"),
-    ("bases", "Системы счисления"),
-    ("strings", "Строки"),
-    ("hash", "Хеши"),
-    ("cipher", "Шифрование"),
-    ("datetime", "Дата и время"),
-    ("fileio", "Файлы"),
-    ("io", "Ввод-вывод"),
+/// Порядок категорий и их заголовки: (ключ, RU, EN).
+pub const CATEGORIES: &[(&str, &str, &str)] = &[
+    ("math", "Математика", "Math"),
+    ("trig", "Тригонометрия", "Trigonometry"),
+    ("bits", "Биты", "Bits"),
+    ("logic", "Логика", "Logic"),
+    ("bases", "Системы счисления", "Number systems"),
+    ("strings", "Строки", "Strings"),
+    ("hash", "Хеши", "Hashes"),
+    ("cipher", "Шифрование", "Ciphers"),
+    ("datetime", "Дата и время", "Date & time"),
+    ("fileio", "Файлы", "Files"),
+    ("io", "Ввод-вывод", "I/O"),
 ];
 
-/// Русский заголовок категории по её ключу (или заглушка, если незнаком).
-pub fn category_label(key: &str) -> &'static str {
+/// Заголовок категории по ключу на нужном языке (или заглушка, если незнаком).
+pub fn category_label(key: &str, lang: crate::Lang) -> &'static str {
     CATEGORIES
         .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, label)| *label)
-        .unwrap_or("Прочее")
+        .find(|(k, ..)| *k == key)
+        .map(|(_, ru, en)| match lang {
+            crate::Lang::Ru => *ru,
+            crate::Lang::En => *en,
+        })
+        .unwrap_or(match lang {
+            crate::Lang::Ru => "Прочее",
+            crate::Lang::En => "Other",
+        })
+}
+
+impl HelpEntry {
+    /// Краткое назначение на нужном языке.
+    pub fn summary(&self, lang: crate::Lang) -> &'static str {
+        match lang {
+            crate::Lang::Ru => self.summary_ru,
+            crate::Lang::En => self.summary_en,
+        }
+    }
+
+    /// Примечание об ошибках/краях на нужном языке (может быть пустым).
+    pub fn note(&self, lang: crate::Lang) -> &'static str {
+        match lang {
+            crate::Lang::Ru => self.note_ru,
+            crate::Lang::En => self.note_en,
+        }
+    }
 }
 
 /// Все статьи справки (в порядке объявления).
@@ -92,7 +116,7 @@ mod tests {
     fn every_category_is_known() {
         for e in ENTRIES {
             assert!(
-                CATEGORIES.iter().any(|(k, _)| *k == e.category),
+                CATEGORIES.iter().any(|(k, ..)| *k == e.category),
                 "{}: неизвестная категория {}",
                 e.name,
                 e.category

@@ -6,9 +6,18 @@ pub struct Settings {
     pub font_size: f32,
     pub always_on_top: bool,
     pub text: String,
+    /// Код языка интерфейса: "ru" | "en". `serde(default)` — чтобы старые файлы без
+    /// этого поля читались.
+    #[serde(default = "default_lang")]
+    pub lang: String,
+}
+fn default_lang() -> String {
+    "ru".to_string()
 }
 impl Default for Settings {
-    fn default() -> Self { Settings { font_size: 14.0, always_on_top: false, text: String::new() } }
+    fn default() -> Self {
+        Settings { font_size: 14.0, always_on_top: false, text: String::new(), lang: default_lang() }
+    }
 }
 fn config_path() -> Option<PathBuf> {
     directories::ProjectDirs::from("irish", "green", "chista-notepad")
@@ -32,11 +41,17 @@ mod tests {
     use super::*;
     #[test]
     fn settings_roundtrip() {
-        let s = Settings { font_size: 16.0, always_on_top: true, text: "x=1".into() };
+        let s = Settings { font_size: 16.0, always_on_top: true, text: "x=1".into(), lang: "en".into() };
         let j = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&j).unwrap();
         assert_eq!(back.font_size, 16.0);
         assert!(back.always_on_top);
         assert_eq!(back.text, "x=1");
+        assert_eq!(back.lang, "en");
+    }
+    #[test]
+    fn old_settings_without_lang_default_to_ru() {
+        let back: Settings = serde_json::from_str(r#"{"font_size":14.0,"always_on_top":false,"text":""}"#).unwrap();
+        assert_eq!(back.lang, "ru");
     }
 }

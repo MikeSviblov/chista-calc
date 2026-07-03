@@ -4,6 +4,7 @@
 //! пересчитываются по ENTER и подставляются в тот же текст.
 
 use crate::document::Document;
+use calc_core::Lang;
 use std::collections::HashSet;
 
 /// Маркер строки-результата (ведущий символ). Даёт и отступ, и признак «это результат».
@@ -14,6 +15,8 @@ pub struct Sheet {
     pub text: String,
     /// Индексы строк (в text) — результатов-ошибок (для красной подсветки).
     pub error_lines: HashSet<usize>,
+    /// Язык сообщений об ошибках.
+    lang: Lang,
 }
 
 fn is_result_line(line: &str) -> bool {
@@ -21,10 +24,16 @@ fn is_result_line(line: &str) -> bool {
 }
 
 impl Sheet {
-    pub fn from_input(input: &str) -> Self {
-        let mut s = Sheet { text: String::new(), error_lines: HashSet::new() };
+    pub fn from_input(input: &str, lang: Lang) -> Self {
+        let mut s = Sheet { text: String::new(), error_lines: HashSet::new(), lang };
         s.rebuild_from(input);
         s
+    }
+
+    /// Сменить язык сообщений об ошибках и пересчитать (ошибки перерисуются).
+    pub fn set_lang(&mut self, lang: Lang) {
+        self.lang = lang;
+        self.recompute();
     }
 
     /// Только строки-ввод (без строк-результатов) — то, что редактирует пользователь.
@@ -37,7 +46,7 @@ impl Sheet {
     }
 
     fn rebuild_from(&mut self, input: &str) {
-        let doc = Document::evaluate(input);
+        let doc = Document::evaluate(input, self.lang);
         let mut out = String::new();
         let mut errors = HashSet::new();
         for (i, line) in input.split('\n').enumerate() {
@@ -114,7 +123,7 @@ mod tests {
     #[test]
     fn rebuild_interleaves_only_for_expressions() {
         // присваивание молчит, выражение даёт строку-результат с маркером
-        let s = Sheet::from_input("x = 2\nx * 3");
+        let s = Sheet::from_input("x = 2\nx * 3", Lang::Ru);
         let lines: Vec<&str> = s.text.split('\n').collect();
         assert_eq!(lines[0], "x = 2");
         assert_eq!(lines[1], "x * 3");
@@ -124,7 +133,7 @@ mod tests {
 
     #[test]
     fn input_strips_result_lines() {
-        let s = Sheet::from_input("a = 1\na + 4");
+        let s = Sheet::from_input("a = 1\na + 4", Lang::Ru);
         // text содержит строку-результат, а input() — нет
         assert!(s.text.contains("\t5"));
         assert_eq!(s.input(), "a = 1\na + 4");
@@ -132,14 +141,14 @@ mod tests {
 
     #[test]
     fn error_line_is_marked_red() {
-        let s = Sheet::from_input("1/0");
+        let s = Sheet::from_input("1/0", Lang::Ru);
         // строка 0 — ввод, строка 1 — результат-ошибка
         assert!(s.error_lines.contains(&1));
     }
 
     #[test]
     fn recompute_after_edit_updates_results() {
-        let mut s = Sheet::from_input("x = 2\nx * 10");
+        let mut s = Sheet::from_input("x = 2\nx * 10", Lang::Ru);
         assert!(s.text.contains("\t20"));
         // пользователь отредактировал ввод (эмулируем: подменяем input и пересчёт)
         s.text = "x = 5\nx * 10".to_string();
@@ -151,7 +160,7 @@ mod tests {
     #[test]
     fn cursor_maps_to_start_of_same_input_line() {
         // ввод: "2+2"(0) \t4(1) "5+5"(2). Курсор на строке-ввода "5+5".
-        let mut s = Sheet::from_input("2+2\n5+5");
+        let mut s = Sheet::from_input("2+2\n5+5", Lang::Ru);
         // позиция начала строки "5+5" в text: "2+2\n\t4\n5+5" → индекс 8
         let pos = s.text.find("5+5").unwrap();
         let pos_chars = s.text[..pos].chars().count();

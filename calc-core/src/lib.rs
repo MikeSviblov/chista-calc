@@ -57,13 +57,25 @@ fn err_pos(e: &CalcError) -> usize {
 
 pub struct Session {
     ev: eval::Evaluator,
+    lang: Lang,
 }
 
 impl Session {
     pub fn new() -> Self {
         Session {
             ev: eval::Evaluator::new(),
+            lang: Lang::default(),
         }
+    }
+
+    /// Язык пользовательских сообщений (ошибки, справка).
+    pub fn lang(&self) -> Lang {
+        self.lang
+    }
+
+    /// Установить язык сообщений.
+    pub fn set_lang(&mut self, lang: Lang) {
+        self.lang = lang;
     }
 
     /// Вычислить исходный текст (одна или несколько инструкций через `;` или перенос строки).

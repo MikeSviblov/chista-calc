@@ -12,6 +12,25 @@ pub enum Lang {
     En,
 }
 
+impl Lang {
+    /// Разбор языка из строки (`ru`/`russian`, `en`/`english`), регистр не важен.
+    pub fn parse(s: &str) -> Option<Lang> {
+        match s.trim().to_lowercase().as_str() {
+            "ru" | "rus" | "russian" | "русский" => Some(Lang::Ru),
+            "en" | "eng" | "english" => Some(Lang::En),
+            _ => None,
+        }
+    }
+
+    /// Короткий код языка (`"ru"`/`"en"`) — для сохранения в настройках.
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::Ru => "ru",
+            Lang::En => "en",
+        }
+    }
+}
+
 /// Возвращает `ru` или `en` по языку (для коротких двуязычных строк).
 fn tr(lang: Lang, ru: &str, en: &str) -> String {
     match lang {
