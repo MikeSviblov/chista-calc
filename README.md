@@ -251,7 +251,7 @@ The full list follows the names actually registered in `calc-core/src/builtins/`
 
 ## Status
 
-v0.2.5. The whole workspace is covered by tests (135 tests: core + notepad), clippy
+v0.2.8. The whole workspace is covered by tests (135 tests: core + notepad), clippy
 `-D warnings` is clean. Both frontends are ready — the CLI and the GUI notepad, with an
 RU/EN language toggle. exe + Linux builds are published to releases on tag.
 
